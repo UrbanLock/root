@@ -17,6 +17,10 @@ import 'package:app/features/lockers/domain/models/locker_type.dart';
 import 'package:app/features/lockers/domain/repositories/locker_repository.dart';
 import 'package:app/features/auth/presentation/pages/login_page.dart';
 import 'package:app/features/home/presentation/widgets/profile_popup.dart';
+import 'package:app/features/profile/presentation/pages/history_page.dart';
+import 'package:app/features/profile/presentation/pages/active_reservations_page.dart';
+import 'package:app/features/profile/presentation/pages/donate_page.dart';
+import 'package:app/features/profile/presentation/pages/help_page.dart';
 
 class HomePage extends StatefulWidget {
   final ThemeManager themeManager;
@@ -986,29 +990,49 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                     setState(() {
                       _showProfilePopup = false;
                     });
-                    // TODO: Naviga alla pagina storico utilizzi
-                    _showComingSoonDialog(context, isDark, 'Storico utilizzi');
+                    Navigator.of(context).push(
+                      CupertinoPageRoute(
+                        builder: (context) => HistoryPage(
+                          themeManager: widget.themeManager,
+                        ),
+                      ),
+                    );
                   },
                   onActiveReservationsTap: () {
                     setState(() {
                       _showProfilePopup = false;
                     });
-                    // TODO: Naviga alla pagina prenotazioni attive
-                    _showComingSoonDialog(context, isDark, 'Prenotazioni attive');
+                    Navigator.of(context).push(
+                      CupertinoPageRoute(
+                        builder: (context) => ActiveReservationsPage(
+                          themeManager: widget.themeManager,
+                        ),
+                      ),
+                    );
                   },
                   onDonateTap: () {
                     setState(() {
                       _showProfilePopup = false;
                     });
-                    // TODO: Naviga alla pagina donazione
-                    _showComingSoonDialog(context, isDark, 'Donare un oggetto');
+                    Navigator.of(context).push(
+                      CupertinoPageRoute(
+                        builder: (context) => DonatePage(
+                          themeManager: widget.themeManager,
+                        ),
+                      ),
+                    );
                   },
                   onHelpTap: () {
                     setState(() {
                       _showProfilePopup = false;
                     });
-                    // TODO: Naviga alla pagina aiuto
-                    _showComingSoonDialog(context, isDark, 'Aiuto e supporto');
+                    Navigator.of(context).push(
+                      CupertinoPageRoute(
+                        builder: (context) => HelpPage(
+                          themeManager: widget.themeManager,
+                        ),
+                      ),
+                    );
                   },
                 ),
               ),
