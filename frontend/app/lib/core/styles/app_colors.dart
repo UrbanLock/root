@@ -49,4 +49,6 @@ class AppColors {
       isDark ? const Color(0xFF2C2C2E) : const Color(0xFFE5E5EA);
   static Color borderSecondary(bool isDark) =>
       isDark ? const Color(0xFF48484A) : const Color(0xFFC7C7CC);
+  static Color borderColor(bool isDark) =>
+      isDark ? const Color(0xFF48484A) : const Color(0xFFC7C7CC);
 }
