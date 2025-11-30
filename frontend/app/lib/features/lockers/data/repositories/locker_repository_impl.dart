@@ -1,5 +1,6 @@
 import 'package:app/features/lockers/domain/models/locker.dart';
 import 'package:app/features/lockers/domain/models/locker_type.dart';
+import 'package:app/features/lockers/domain/models/locker_cell.dart';
 import 'package:app/features/lockers/domain/repositories/locker_repository.dart';
 
 /// Implementazione reale del repository (da usare quando il backend sarà pronto)
@@ -61,6 +62,20 @@ class LockerRepositoryImpl implements LockerRepository {
 
   @override
   Future<List<Locker>> searchLockers(String query) {
+    throw UnimplementedError(
+      'Backend non ancora disponibile. Usa LockerRepositoryMock per i test.',
+    );
+  }
+
+  @override
+  Future<List<LockerCell>> getLockerCells(String lockerId) {
+    throw UnimplementedError(
+      'Backend non ancora disponibile. Usa LockerRepositoryMock per i test.',
+    );
+  }
+
+  @override
+  Future<LockerCellStats> getLockerCellStats(String lockerId) {
     throw UnimplementedError(
       'Backend non ancora disponibile. Usa LockerRepositoryMock per i test.',
     );

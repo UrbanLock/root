@@ -118,7 +118,7 @@ class ProfilePopup extends StatelessWidget {
                   context: context,
                   isDark: isDark,
                   icon: CupertinoIcons.lock,
-                  title: 'Prenotazioni attive',
+                  title: 'Celle attive',
                   onTap: onActiveReservationsTap,
                 ),
                 _buildMenuItem(

@@ -17,11 +17,14 @@ import 'package:app/features/lockers/domain/models/locker_type.dart';
 import 'package:app/features/lockers/domain/repositories/locker_repository.dart';
 import 'package:app/features/auth/presentation/pages/login_page.dart';
 import 'package:app/features/home/presentation/widgets/profile_popup.dart';
+import 'package:app/features/home/presentation/pages/locker_detail_page.dart';
 import 'package:app/features/profile/presentation/pages/history_page.dart';
 import 'package:app/features/profile/presentation/pages/active_reservations_page.dart';
 import 'package:app/features/profile/presentation/pages/donate_page.dart';
 import 'package:app/features/profile/presentation/pages/help_page.dart';
 import 'package:app/core/utils/responsive_utils.dart';
+import 'package:app/features/notifications/data/repositories/notification_repository_impl.dart';
+import 'package:app/features/notifications/data/repositories/notification_repository.dart';
 
 class HomePage extends StatefulWidget {
   final ThemeManager themeManager;
@@ -35,7 +38,7 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
+class _HomePageState extends State<HomePage> with TickerProviderStateMixin, WidgetsBindingObserver {
   int _currentIndex = 1; // Home selezionata di default
   Set<LockerType> _selectedFilters = {}; // Filtri attivi (vuoto = tutti)
   Locker? _selectedLocker; // Locker selezionato per i dettagli
@@ -68,21 +71,55 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   String? _userName;
   String? _userEmail;
 
+  // Stato notifiche
+  int _unreadNotificationsCount = 0;
+  final NotificationRepository _notificationRepository = NotificationRepositoryImpl();
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 800),
     );
     _loadLockers();
     _requestLocationPermissionAndZoom();
+    _loadUnreadNotificationsCount();
   }
   
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _animationController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Quando l'app va in background, verifica se ci sono celle aperte
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      _checkOpenCellsAndNotify();
+    }
+  }
+
+  Future<void> _loadUnreadNotificationsCount() async {
+    try {
+      final count = await _notificationRepository.getUnreadCount();
+      if (mounted) {
+        setState(() {
+          _unreadNotificationsCount = count;
+        });
+      }
+    } catch (e) {
+      // Ignora errori
+    }
+  }
+
+  Future<void> _checkOpenCellsAndNotify() async {
+    // TODO: Quando il backend sarà pronto, caricare celle attive dal repository
+    // Per ora, questa funzione è un placeholder
+    // In produzione, verificheremo se ci sono celle aperte e notificheremo l'utente
   }
   
   // Metodo helper per animare lo zoom
@@ -893,7 +930,16 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                                     color: AppColors.primary(isDark),
                                     borderRadius: BorderRadius.circular(20),
                                     onPressed: () {
-                                      // TODO: apri dettagli locker
+                                      // Naviga alla pagina di dettaglio del locker
+                                      Navigator.of(context).push(
+                                        CupertinoPageRoute(
+                                          builder: (context) => LockerDetailPage(
+                                            themeManager: widget.themeManager,
+                                            locker: _selectedLocker!,
+                                            cellRepository: AppDependencies.cellRepository,
+                                          ),
+                                        ),
+                                      );
                                     },
                                     child: const Text(
                                       'Apri',
@@ -1125,16 +1171,47 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                               );
                             }
                           },
-                          items: const [
+                          items: [
                             BottomNavigationBarItem(
-                              icon: Icon(CupertinoIcons.bell),
+                              icon: Stack(
+                                children: [
+                                  const Icon(CupertinoIcons.bell),
+                                  if (_unreadNotificationsCount > 0)
+                                    Positioned(
+                                      right: 0,
+                                      top: 0,
+                                      child: Container(
+                                        padding: const EdgeInsets.all(4),
+                                        decoration: const BoxDecoration(
+                                          color: CupertinoColors.systemRed,
+                                          shape: BoxShape.circle,
+                                        ),
+                                        constraints: const BoxConstraints(
+                                          minWidth: 16,
+                                          minHeight: 16,
+                                        ),
+                                        child: Text(
+                                          _unreadNotificationsCount > 99
+                                              ? '99+'
+                                              : '$_unreadNotificationsCount',
+                                          style: const TextStyle(
+                                            color: CupertinoColors.white,
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
                               label: 'Notifiche',
                             ),
-                            BottomNavigationBarItem(
+                            const BottomNavigationBarItem(
                               icon: Icon(CupertinoIcons.home),
                               label: 'Home',
                             ),
-                            BottomNavigationBarItem(
+                            const BottomNavigationBarItem(
                               icon: Icon(CupertinoIcons.settings),
                               label: 'Impostazioni',
                             ),

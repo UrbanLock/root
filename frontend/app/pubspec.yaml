@@ -13,6 +13,10 @@ dependencies:
   flutter_map: ^8.2.2
   latlong2: ^0.9.0
   location: ^6.0.2
+  image_picker: ^1.0.7
+  flutter_blue_plus: ^1.32.8
+  flutter_local_notifications: ^17.2.2
+  timezone: ^0.9.4
 
   cupertino_icons: ^1.0.8
 

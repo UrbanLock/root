@@ -1,5 +1,7 @@
 import 'package:latlong2/latlong.dart';
 import 'package:app/features/lockers/domain/models/locker_type.dart';
+import 'package:app/features/lockers/domain/models/locker_cell.dart';
+import 'package:app/features/lockers/domain/models/cell_type.dart';
 
 class Locker {
   final String id;
@@ -10,6 +12,8 @@ class Locker {
   final int availableCells;
   final bool isActive;
   final String? description;
+  final List<LockerCell>? cells; // Lista delle celle disponibili (opzionale, caricata on-demand)
+  final LockerCellStats? cellStats; // Statistiche delle celle per tipo
 
   const Locker({
     required this.id,
@@ -20,10 +24,23 @@ class Locker {
     required this.availableCells,
     this.isActive = true,
     this.description,
+    this.cells,
+    this.cellStats,
   });
 
   double get availabilityPercentage =>
       totalCells > 0 ? (availableCells / totalCells) * 100 : 0;
+
+  /// Ottiene le celle disponibili per un tipo specifico
+  List<LockerCell> getCellsByType(CellType cellType) {
+    if (cells == null) return [];
+    return cells!.where((cell) => cell.type == cellType && cell.isAvailable).toList();
+  }
+
+  /// Verifica se ci sono celle disponibili per un tipo specifico
+  bool hasAvailableCells(CellType cellType) {
+    return getCellsByType(cellType).isNotEmpty;
+  }
 }
 
 

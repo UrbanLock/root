@@ -1,9 +1,13 @@
 import 'package:flutter/cupertino.dart';
 import 'package:app/core/theme/theme_manager.dart';
+import 'package:app/core/notifications/notification_service.dart';
 import 'package:app/features/home/presentation/pages/home_page.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Inizializza il servizio di notifiche
+  await NotificationService().initialize();
   
   // Leggi il tema di sistema PRIMA di creare l'app
   final brightness = WidgetsBinding.instance.platformDispatcher.platformBrightness;

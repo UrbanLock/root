@@ -1,6 +1,8 @@
 import 'package:app/features/lockers/domain/repositories/locker_repository.dart';
 import 'package:app/features/lockers/data/repositories/locker_repository_mock.dart';
 import 'package:app/features/lockers/data/repositories/locker_repository_impl.dart';
+import 'package:app/features/cells/domain/repositories/cell_repository.dart';
+import 'package:app/features/cells/data/repositories/cell_repository_mock.dart';
 
 /// Dependency Injection semplice per l'app
 /// 
@@ -19,6 +21,22 @@ class AppDependencies {
       return LockerRepositoryMock();
     } else {
       return LockerRepositoryImpl();
+    }
+  }
+
+  /// Repository per gestire le celle attive
+  /// 
+  /// **TODO quando il backend sarà pronto:**
+  /// 1. Creare CellRepositoryImpl che implementa le chiamate HTTP reali
+  /// 2. Cambiare useMockData a false
+  /// 3. Configurare ApiClient con l'URL del backend
+  static CellRepository? get cellRepository {
+    if (useMockData) {
+      return CellRepositoryMock();
+    } else {
+      // TODO: Implementare CellRepositoryImpl quando il backend sarà pronto
+      // return CellRepositoryImpl(apiClient: ApiClient(baseUrl: ApiConfig.baseUrl));
+      return null; // Per ora null, da implementare
     }
   }
 }

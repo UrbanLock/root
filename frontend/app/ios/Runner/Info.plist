@@ -49,5 +49,13 @@
 	<string>NULL ha bisogno della tua posizione per mostrarti i lockers più vicini e aiutarti a navigare.</string>
 	<key>NSLocationAlwaysUsageDescription</key>
 	<string>NULL ha bisogno della tua posizione per mostrarti i lockers più vicini anche quando l'app è in background.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>NULL ha bisogno di accedere alla fotocamera per scattare una foto all'oggetto che vuoi donare.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>NULL ha bisogno di accedere alla galleria fotografica per selezionare una foto dell'oggetto che vuoi donare.</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>NULL ha bisogno del Bluetooth per rilevare e aprire i lockers nelle vicinanze.</string>
+	<key>NSBluetoothPeripheralUsageDescription</key>
+	<string>NULL ha bisogno del Bluetooth per rilevare e aprire i lockers nelle vicinanze.</string>
 </dict>
 </plist>
