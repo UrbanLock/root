@@ -936,7 +936,12 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
                                           builder: (context) => LockerDetailPage(
                                             themeManager: widget.themeManager,
                                             locker: _selectedLocker!,
-                                            cellRepository: AppDependencies.cellRepository,
+                                            isAuthenticated: _isAuthenticated,
+                                            onAuthenticationChanged: (isAuthenticated) {
+                                              setState(() {
+                                                _isAuthenticated = isAuthenticated;
+                                              });
+                                            },
                                           ),
                                         ),
                                       );

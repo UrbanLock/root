@@ -146,8 +146,12 @@ class NotificationService {
   /// 
   /// **Caso d'uso**: L'utente ha aperto una cella ma chiude l'app prima di chiudere lo sportello
   Future<void> notifyOpenCellInBackground(ActiveCell cell) async {
+    // Genera un ID valido (32-bit integer) usando hash della stringa
+    // Questo evita errori quando cell.id è troppo grande (es. timestamp)
+    final cellIdHash = cell.id.hashCode.abs() % 1000000; // Limita a 6 cifre
+    
     await showNotification(
-      id: 1000 + int.parse(cell.id), // ID univoco per ogni cella
+      id: 1000 + cellIdHash, // ID univoco per ogni cella (valido per 32-bit)
       title: 'Cella aperta',
       body: 'Ricorda di chiudere lo sportello della ${cell.cellNumber} al locker ${cell.lockerName}',
       payload: 'open_cell_${cell.id}',
@@ -155,7 +159,7 @@ class NotificationService {
 
     // Programma un promemoria dopo 5 minuti se la cella è ancora aperta
     await scheduleNotification(
-      id: 2000 + int.parse(cell.id),
+      id: 2000 + cellIdHash,
       title: 'Promemoria: Cella aperta',
       body: 'La ${cell.cellNumber} al locker ${cell.lockerName} è ancora aperta. Ricorda di chiudere lo sportello.',
       scheduledDate: DateTime.now().add(const Duration(minutes: 5)),
@@ -173,8 +177,9 @@ class NotificationService {
     
     // Notifica solo se mancano meno di 1 ora
     if (timeUntilExpiry.inHours < 1 && timeUntilExpiry.inMinutes > 0) {
+      final cellIdHash = cell.id.hashCode.abs() % 1000000;
       await showNotification(
-        id: 3000 + int.parse(cell.id),
+        id: 3000 + cellIdHash,
         title: 'Cella in scadenza',
         body: 'La ${cell.cellNumber} al locker ${cell.lockerName} scade tra ${timeUntilExpiry.inMinutes} minuti',
         payload: 'expiring_cell_${cell.id}',
@@ -186,8 +191,9 @@ class NotificationService {
   /// 
   /// **Caso d'uso**: Avvisa l'utente che deve ritirare/depositare l'oggetto
   Future<void> notifyCellExpired(ActiveCell cell) async {
+    final cellIdHash = cell.id.hashCode.abs() % 1000000;
     await showNotification(
-      id: 4000 + int.parse(cell.id),
+      id: 4000 + cellIdHash,
       title: 'Cella scaduta',
       body: 'La ${cell.cellNumber} al locker ${cell.lockerName} è scaduta. ${cell.type == CellUsageType.deposited ? "Ritira il tuo oggetto" : "Rimetti l\'oggetto"}',
       payload: 'expired_cell_${cell.id}',
@@ -198,16 +204,17 @@ class NotificationService {
   /// 
   /// **Caso d'uso**: Conferma all'utente che l'operazione è completata
   Future<void> notifyCellClosed(ActiveCell cell) async {
+    final cellIdHash = cell.id.hashCode.abs() % 1000000;
     await showNotification(
-      id: 5000 + int.parse(cell.id),
+      id: 5000 + cellIdHash,
       title: 'Cella chiusa',
       body: 'La ${cell.cellNumber} al locker ${cell.lockerName} è stata chiusa con successo',
       payload: 'closed_cell_${cell.id}',
     );
 
     // Cancella i promemoria programmati per questa cella
-    await cancelNotification(1000 + int.parse(cell.id));
-    await cancelNotification(2000 + int.parse(cell.id));
+    await cancelNotification(1000 + cellIdHash);
+    await cancelNotification(2000 + cellIdHash);
   }
 
   /// Notifica promemoria generico

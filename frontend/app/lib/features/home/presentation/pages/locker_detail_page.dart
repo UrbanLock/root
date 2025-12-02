@@ -1,6 +1,4 @@
-import 'dart:io';
 import 'package:flutter/cupertino.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:app/core/theme/theme_manager.dart';
 import 'package:app/core/styles/app_colors.dart';
 import 'package:app/core/styles/app_text_styles.dart';
@@ -9,30 +7,32 @@ import 'package:app/features/lockers/domain/models/locker.dart';
 import 'package:app/features/lockers/domain/models/locker_cell.dart';
 import 'package:app/features/lockers/domain/models/cell_type.dart';
 import 'package:app/features/profile/presentation/pages/open_cell_page.dart';
-import 'package:app/features/cells/domain/models/active_cell.dart';
-import 'package:app/features/cells/domain/repositories/cell_repository.dart';
+import 'package:app/features/auth/presentation/pages/login_page.dart';
+import 'package:app/features/payment/presentation/pages/deposit_payment_page.dart';
 
 /// Pagina di dettaglio di un locker
 /// 
-/// Mostra informazioni dettagliate sul locker e permette di:
-/// - Prendere in prestito oggetti dalle celle disponibili
-/// - Depositare oggetti personali (a pagamento)
-/// - Ritirare prodotti da negozi locali
+/// Mostra tutte le celle disponibili del locker, divise per tipo:
+/// - Celle per prestito: descrizione contenuto + pulsante "Apri"
+/// - Celle per deposito: dimensione + costo + pulsante "Affitta"
+/// - Celle per ritiro prodotti: NON mostrate in questa sezione
 /// 
 /// **TODO quando il backend sarà pronto:**
-/// - Caricare informazioni dettagliate dal backend (GET /api/v1/lockers/:id)
-/// - Mostrare celle disponibili in tempo reale
+/// - Caricare celle dal backend (GET /api/v1/lockers/:id/cells)
+/// - Aggiornare disponibilità in tempo reale
 /// - Implementare prenotazione/pagamento tramite backend
 class LockerDetailPage extends StatefulWidget {
   final ThemeManager themeManager;
   final Locker locker;
-  final CellRepository? cellRepository;
+  final bool isAuthenticated;
+  final Function(bool)? onAuthenticationChanged;
 
   const LockerDetailPage({
     super.key,
     required this.themeManager,
     required this.locker,
-    this.cellRepository,
+    this.isAuthenticated = false,
+    this.onAuthenticationChanged,
   });
 
   @override
@@ -40,230 +40,268 @@ class LockerDetailPage extends StatefulWidget {
 }
 
 class _LockerDetailPageState extends State<LockerDetailPage> {
-  final ImagePicker _imagePicker = ImagePicker();
   bool _isLoading = true;
   List<LockerCell> _cells = [];
-  LockerCellStats? _cellStats;
+  String? _errorMessage;
+
+  /// Raggruppa le celle di deposito per dimensione
+  Map<CellSize, List<LockerCell>> _groupDepositCellsBySize() {
+    final depositCells = _cells.where((c) => c.type == CellType.deposit).toList();
+    final grouped = <CellSize, List<LockerCell>>{};
+    
+    for (final cell in depositCells) {
+      if (!grouped.containsKey(cell.size)) {
+        grouped[cell.size] = [];
+      }
+      grouped[cell.size]!.add(cell);
+    }
+    
+    return grouped;
+  }
+  late bool _isAuthenticated;
 
   @override
   void initState() {
     super.initState();
+    _isAuthenticated = widget.isAuthenticated;
     _loadCells();
   }
 
   Future<void> _loadCells() async {
     setState(() {
       _isLoading = true;
+      _errorMessage = null;
     });
 
     try {
       // TODO: Quando il backend sarà pronto, caricare celle dal repository
       final repository = AppDependencies.lockerRepository;
-      _cells = await repository.getLockerCells(widget.locker.id);
-      _cellStats = await repository.getLockerCellStats(widget.locker.id);
+      final allCells = await repository.getLockerCells(widget.locker.id);
+      
+      // Filtra le celle: escludi pickup, mostra solo borrow e deposit DISPONIBILI
+      final filteredCells = allCells.where((cell) => 
+        (cell.type == CellType.borrow || cell.type == CellType.deposit) &&
+        cell.isAvailable
+      ).toList();
+      
+      setState(() {
+        _cells = filteredCells;
+        _isLoading = false;
+      });
     } catch (e) {
-      // Gestisci errore
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      setState(() {
+        _errorMessage = 'Errore nel caricamento: ${e.toString()}';
+        _isLoading = false;
+      });
     }
   }
 
-  /// Gestisce la selezione di una cella per il prestito
-  /// 
-  /// **Flusso:**
-  /// 1. L'utente apre la cella
-  /// 2. Chiude la cella (preleva l'oggetto)
-  /// 3. Ha un tempo determinato per utilizzare l'oggetto
-  /// 4. Quando rimette l'oggetto, deve scattare una foto
-  Future<void> _handleBorrowCell(LockerCell cell) async {
-    final borrowDuration = cell.borrowDuration ?? const Duration(days: 7);
-    final durationText = borrowDuration.inDays > 0
-        ? '${borrowDuration.inDays} giorni'
-        : '${borrowDuration.inHours} ore';
-
-    final shouldBorrow = await showCupertinoDialog<bool>(
+  /// Mostra dialog per richiedere il login
+  void _showLoginRequiredDialog() {
+    final isDark = widget.themeManager.isDarkMode;
+    showCupertinoDialog(
       context: context,
       builder: (context) => CupertinoAlertDialog(
-        title: Text('Prendi in prestito: ${cell.itemName ?? "Oggetto"}'),
-        content: Text(
-          '${cell.itemDescription ?? ""}\n\nTempo di prestito: $durationText\n\nQuando rimetti l\'oggetto, sarà richiesta una foto.',
+        title: const Text('Accesso richiesto'),
+        content: const Text(
+          'Per prendere in prestito o affittare una cella è necessario effettuare l\'accesso.',
         ),
         actions: [
           CupertinoDialogAction(
             child: const Text('Annulla'),
-            onPressed: () => Navigator.of(context).pop(false),
+            onPressed: () => Navigator.of(context).pop(),
           ),
           CupertinoDialogAction(
             isDefaultAction: true,
-            child: const Text('Prendi in prestito'),
-            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Accedi'),
+            onPressed: () {
+              Navigator.of(context).pop();
+              _navigateToLogin();
+            },
           ),
         ],
       ),
     );
+  }
 
-    if (shouldBorrow != true) return;
-
-    // TODO: Quando il backend sarà pronto, chiamare API per prendere in prestito
-    // final activeCell = await widget.cellRepository!.borrowCell(cell.id);
-
-    // Crea una cella attiva mock
-    final activeCell = ActiveCell(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      lockerId: widget.locker.id,
-      lockerName: widget.locker.name,
-      lockerType: widget.locker.type.label,
-      cellNumber: cell.cellNumber,
-      cellId: cell.id,
-      startTime: DateTime.now(),
-      endTime: DateTime.now().add(borrowDuration),
-      type: CellUsageType.borrowed,
-    );
-
-    if (mounted) {
-      Navigator.of(context).push(
-        CupertinoPageRoute(
-          builder: (context) => OpenCellPage(
-            themeManager: widget.themeManager,
-            cell: activeCell,
-            // Nessuna foto all'apertura, ma sarà richiesta quando rimette l'oggetto
-            onCellClosed: (cellId) {},
-          ),
+  /// Naviga alla pagina di login
+  Future<void> _navigateToLogin() async {
+    final result = await Navigator.of(context).push<bool>(
+      CupertinoPageRoute(
+        builder: (context) => LoginPage(
+          themeManager: widget.themeManager,
+          onLoginSuccess: (success) {
+            if (success) {
+              setState(() {
+                _isAuthenticated = true;
+              });
+              widget.onAuthenticationChanged?.call(true);
+            }
+          },
         ),
-      );
+      ),
+    );
+    
+    // Se il login è riuscito, result sarà true
+    if (result == true || _isAuthenticated) {
+      // L'utente è ora autenticato, può procedere
     }
   }
 
-  /// Gestisce la richiesta di una cella per depositare
-  /// 
-  /// **NOTA**: Per depositare NON è richiesta la foto
-  Future<void> _handleDepositCell(LockerCell cell) async {
-    // Mostra informazioni sul prezzo e dimensione
+  /// Gestisce il click su una cella di prestito
+  void _handleBorrowCell(LockerCell cell) {
+    // Verifica autenticazione
+    if (!_isAuthenticated) {
+      _showLoginRequiredDialog();
+      return;
+    }
+
+    // Mostra popup con avviso sulla foto richiesta al ritorno
+    showCupertinoDialog(
+      context: context,
+      builder: (context) => CupertinoAlertDialog(
+        title: Text('Prendi in prestito: ${cell.itemName ?? "Oggetto"}'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (cell.itemDescription != null) ...[
+              Text(
+                cell.itemDescription!,
+                style: const TextStyle(fontSize: 14),
+              ),
+              const SizedBox(height: 12),
+            ],
+            if (cell.borrowDuration != null) ...[
+              Row(
+                children: [
+                  const Icon(
+                    CupertinoIcons.clock,
+                    size: 14,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Tempo di prestito: ${cell.borrowDuration!.inDays} giorni',
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+            ],
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: CupertinoColors.systemOrange.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(
+                    CupertinoIcons.camera,
+                    size: 16,
+                    color: CupertinoColors.systemOrange,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Al ritorno dell\'oggetto sarà richiesta una foto per verificare le condizioni.',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: CupertinoColors.systemOrange.darkColor,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          CupertinoDialogAction(
+            child: const Text('Annulla'),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            child: const Text('Apri'),
+            onPressed: () {
+              Navigator.of(context).pop();
+              // Naviga alla procedura di sblocco cella
+              Navigator.of(context).push(
+                CupertinoPageRoute(
+                  builder: (context) => OpenCellPage(
+                    themeManager: widget.themeManager,
+                    cell: cell,
+                    lockerName: widget.locker.name,
+                    lockerId: widget.locker.id,
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Gestisce il click su una cella di deposito
+  void _handleDepositCell(LockerCell cell) {
+    // Verifica autenticazione
+    if (!_isAuthenticated) {
+      _showLoginRequiredDialog();
+      return;
+    }
+
     final priceInfo = '€${cell.pricePerDay.toStringAsFixed(2)}/giorno o €${cell.pricePerHour.toStringAsFixed(2)}/ora';
     final sizeInfo = '${cell.size.label} (${cell.size.dimensions})';
 
-    final shouldDeposit = await showCupertinoDialog<bool>(
+    showCupertinoDialog(
       context: context,
       builder: (context) => CupertinoAlertDialog(
-        title: const Text('Deposita oggetto'),
+        title: const Text('Affitta cella'),
         content: Text(
           'Dimensione: $sizeInfo\nCosto: $priceInfo\n\nLa cella sarà disponibile per 24 ore.',
         ),
         actions: [
           CupertinoDialogAction(
             child: const Text('Annulla'),
-            onPressed: () => Navigator.of(context).pop(false),
+            onPressed: () => Navigator.of(context).pop(),
           ),
           CupertinoDialogAction(
             isDefaultAction: true,
-            child: const Text('Conferma'),
-            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Affitta'),
+            onPressed: () {
+              Navigator.of(context).pop();
+              // Naviga alla verifica Bluetooth (stessa schermata del prestito)
+              Navigator.of(context).push(
+                CupertinoPageRoute(
+                  builder: (context) => OpenCellPage(
+                    themeManager: widget.themeManager,
+                    cell: cell,
+                    lockerName: widget.locker.name,
+                    lockerId: widget.locker.id,
+                    // Callback chiamato dopo verifica Bluetooth per navigare al pagamento
+                    onVerificationComplete: () {
+                      Navigator.of(context).pushReplacement(
+                        CupertinoPageRoute(
+                          builder: (context) => DepositPaymentPage(
+                            themeManager: widget.themeManager,
+                            cell: cell,
+                            lockerName: widget.locker.name,
+                            lockerId: widget.locker.id,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              );
+            },
           ),
         ],
       ),
     );
-
-    if (shouldDeposit != true) return;
-
-    // TODO: Quando il backend sarà pronto, chiamare API per depositare
-    // final activeCell = await widget.cellRepository!.requestCell(
-    //   widget.locker.id,
-    //   cellId: cell.id,
-    // );
-
-    // Crea una cella attiva mock (senza foto)
-    final activeCell = ActiveCell(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      lockerId: widget.locker.id,
-      lockerName: widget.locker.name,
-      lockerType: widget.locker.type.label,
-      cellNumber: cell.cellNumber,
-      cellId: cell.id,
-      startTime: DateTime.now(),
-      endTime: DateTime.now().add(const Duration(hours: 24)),
-      type: CellUsageType.deposited,
-    );
-
-    if (mounted) {
-      Navigator.of(context).push(
-        CupertinoPageRoute(
-          builder: (context) => OpenCellPage(
-            themeManager: widget.themeManager,
-            cell: activeCell,
-            // Nessuna foto richiesta per depositare
-            onCellClosed: (cellId) {},
-          ),
-        ),
-      );
-    }
-  }
-
-  /// Gestisce il ritiro di un prodotto
-  Future<void> _handlePickupCell(LockerCell cell) async {
-    final timeRemaining = cell.availableUntil != null
-        ? cell.availableUntil!.difference(DateTime.now())
-        : null;
-
-    final timeInfo = timeRemaining != null && timeRemaining.inHours > 0
-        ? 'Disponibile per altre ${timeRemaining.inHours} ore'
-        : timeRemaining != null && timeRemaining.inMinutes > 0
-            ? 'Disponibile per altri ${timeRemaining.inMinutes} minuti'
-            : 'Disponibile';
-
-    final shouldPickup = await showCupertinoDialog<bool>(
-      context: context,
-      builder: (context) => CupertinoAlertDialog(
-        title: Text('Ritira: ${cell.itemName ?? "Prodotto"}'),
-        content: Text(
-          'Negoziante: ${cell.storeName ?? "N/A"}\n$timeInfo\n\nVuoi ritirare questo prodotto?',
-        ),
-        actions: [
-          CupertinoDialogAction(
-            child: const Text('Annulla'),
-            onPressed: () => Navigator.of(context).pop(false),
-          ),
-          CupertinoDialogAction(
-            isDefaultAction: true,
-            child: const Text('Ritira'),
-            onPressed: () => Navigator.of(context).pop(true),
-          ),
-        ],
-      ),
-    );
-
-    if (shouldPickup != true) return;
-
-    // TODO: Quando il backend sarà pronto, chiamare API per ritirare
-    // final activeCell = await widget.cellRepository!.pickupCell(cell.id);
-
-    // Crea una cella attiva mock (tipo deposited perché l'utente "deposita" il prodotto ritirato)
-    final activeCell = ActiveCell(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      lockerId: widget.locker.id,
-      lockerName: widget.locker.name,
-      lockerType: widget.locker.type.label,
-      cellNumber: cell.cellNumber,
-      cellId: cell.id,
-      startTime: DateTime.now(),
-      endTime: null, // Nessuna scadenza per prodotti ritirati
-      type: CellUsageType.deposited,
-    );
-
-    if (mounted) {
-      Navigator.of(context).push(
-        CupertinoPageRoute(
-          builder: (context) => OpenCellPage(
-            themeManager: widget.themeManager,
-            cell: activeCell,
-            onCellClosed: (cellId) {},
-          ),
-        ),
-      );
-    }
   }
 
   @override
@@ -285,377 +323,406 @@ class _LockerDetailPageState extends State<LockerDetailPage> {
           child: SafeArea(
             child: _isLoading
                 ? const Center(child: CupertinoActivityIndicator())
-                : ListView(
-                    padding: const EdgeInsets.all(20),
-                    children: [
-                      // Icona locker
-                      Center(
-                        child: Container(
-                          width: 80,
-                          height: 80,
-                          decoration: BoxDecoration(
-                            color: AppColors.iconBackground(isDark),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Icon(
-                            widget.locker.type.icon,
-                            size: 40,
-                            color: AppColors.primary(isDark),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      // Nome e tipo
-                      Text(
-                        widget.locker.name,
-                        style: AppTextStyles.title(isDark).copyWith(fontSize: 24),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        widget.locker.type.label,
-                        style: AppTextStyles.bodySecondary(isDark),
-                        textAlign: TextAlign.center,
-                      ),
-                      if (widget.locker.description != null) ...[
-                        const SizedBox(height: 24),
-                        Text(
-                          widget.locker.description!,
-                          style: AppTextStyles.body(isDark),
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
-                      const SizedBox(height: 32),
-                      // Statistiche celle
-                      if (_cellStats != null) ...[
-                        Container(
-                          padding: const EdgeInsets.all(20),
-                          decoration: BoxDecoration(
-                            color: AppColors.surface(isDark),
-                            borderRadius: BorderRadius.circular(16),
-                          ),
+                : _errorMessage != null
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
                           child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Text(
-                                'Disponibilità',
-                                style: AppTextStyles.title(isDark),
+                              Icon(
+                                CupertinoIcons.exclamationmark_triangle,
+                                size: 48,
+                                color: AppColors.textSecondary(isDark),
                               ),
                               const SizedBox(height: 16),
-                              _buildStatRow(
-                                isDark: isDark,
-                                label: 'Totale',
-                                value: '${_cellStats!.totalCells} celle',
+                              Text(
+                                _errorMessage!,
+                                style: AppTextStyles.body(isDark),
+                                textAlign: TextAlign.center,
                               ),
-                              const SizedBox(height: 12),
-                              _buildStatRow(
-                                isDark: isDark,
-                                label: CellType.borrow.label,
-                                value: '${_cellStats!.availableBorrowCells} disponibili',
-                                icon: CellType.borrow.icon,
-                              ),
-                              const SizedBox(height: 8),
-                              _buildStatRow(
-                                isDark: isDark,
-                                label: CellType.deposit.label,
-                                value: '${_cellStats!.availableDepositCells} disponibili',
-                                icon: CellType.deposit.icon,
-                              ),
-                              const SizedBox(height: 8),
-                              _buildStatRow(
-                                isDark: isDark,
-                                label: CellType.pickup.label,
-                                value: '${_cellStats!.availablePickupCells} disponibili',
-                                icon: CellType.pickup.icon,
+                              const SizedBox(height: 24),
+                              CupertinoButton.filled(
+                                onPressed: _loadCells,
+                                child: const Text('Riprova'),
                               ),
                             ],
                           ),
                         ),
-                        const SizedBox(height: 32),
-                      ],
-                      // Sezioni per tipo di cella
-                      if (_cells.isNotEmpty) ...[
-                        // Celle per prendere in prestito
-                        if (_cells.any((c) => c.type == CellType.borrow && c.isAvailable))
-                          _buildCellTypeSection(
-                            isDark: isDark,
-                            title: CellType.borrow.label,
-                            description: CellType.borrow.description,
-                            icon: CellType.borrow.icon,
-                            cells: _cells.where((c) => c.type == CellType.borrow && c.isAvailable).toList(),
-                            onCellTap: _handleBorrowCell,
-                          ),
-                        // Celle per depositare
-                        if (_cells.any((c) => c.type == CellType.deposit && c.isAvailable))
-                          _buildCellTypeSection(
-                            isDark: isDark,
-                            title: CellType.deposit.label,
-                            description: CellType.deposit.description,
-                            icon: CellType.deposit.icon,
-                            cells: _cells.where((c) => c.type == CellType.deposit && c.isAvailable).toList(),
-                            onCellTap: _handleDepositCell,
-                          ),
-                        // Celle per ritirare
-                        if (_cells.any((c) => c.type == CellType.pickup && c.isAvailable))
-                          _buildCellTypeSection(
-                            isDark: isDark,
-                            title: CellType.pickup.label,
-                            description: CellType.pickup.description,
-                            icon: CellType.pickup.icon,
-                            cells: _cells.where((c) => c.type == CellType.pickup && c.isAvailable).toList(),
-                            onCellTap: _handlePickupCell,
-                          ),
-                      ] else ...[
-                        // Nessuna cella disponibile
-                        Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(40),
-                            child: Column(
-                              children: [
-                                Icon(
-                                  CupertinoIcons.lock,
-                                  size: 64,
-                                  color: AppColors.textSecondary(isDark),
-                                ),
-                                const SizedBox(height: 16),
-                                Text(
-                                  'Nessuna cella disponibile',
-                                  style: AppTextStyles.title(isDark),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  'Tutte le celle sono attualmente occupate',
-                                  style: AppTextStyles.bodySecondary(isDark),
-                                  textAlign: TextAlign.center,
-                                ),
-                              ],
+                      )
+                    : _cells.isEmpty
+                        ? Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(40),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    CupertinoIcons.lock,
+                                    size: 64,
+                                    color: AppColors.textSecondary(isDark),
+                                  ),
+                                  const SizedBox(height: 24),
+                                  Text(
+                                    'Nessuna cella disponibile',
+                                    style: AppTextStyles.title(isDark),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Non ci sono celle di prestito o deposito disponibili in questo locker',
+                                    style: AppTextStyles.bodySecondary(isDark),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ],
+                              ),
                             ),
+                          )
+                        : ListView(
+                            padding: const EdgeInsets.all(20),
+                            children: [
+                              // Header con info locker
+                              _buildLockerHeader(isDark),
+                              const SizedBox(height: 32),
+                              // Sezione celle per prestito
+                              if (_cells.any((c) => c.type == CellType.borrow)) ...[
+                                _buildSectionHeader(
+                                  isDark: isDark,
+                                  title: 'Prendi in prestito',
+                                  icon: CellType.borrow.icon,
+                                ),
+                                const SizedBox(height: 12),
+                                ..._cells
+                                    .where((c) => c.type == CellType.borrow)
+                                    .map((cell) => Padding(
+                                          padding: const EdgeInsets.only(bottom: 12),
+                                          child: _buildBorrowCellCard(
+                                            isDark: isDark,
+                                            cell: cell,
+                                          ),
+                                        )),
+                                const SizedBox(height: 32),
+                              ],
+                              // Sezione celle per deposito (raggruppate per dimensione)
+                              if (_cells.any((c) => c.type == CellType.deposit)) ...[
+                                _buildSectionHeader(
+                                  isDark: isDark,
+                                  title: 'Deposita oggetto',
+                                  icon: CellType.deposit.icon,
+                                ),
+                                const SizedBox(height: 12),
+                                ..._groupDepositCellsBySize().entries.map((entry) {
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 12),
+                                    child: _buildDepositGroupCard(
+                                      isDark: isDark,
+                                      size: entry.key,
+                                      cells: entry.value,
+                                    ),
+                                  );
+                                }),
+                              ],
+                            ],
                           ),
-                        ),
-                      ],
-                    ],
-                  ),
           ),
         );
       },
     );
   }
 
-  Widget _buildStatRow({
+  Widget _buildLockerHeader(bool isDark) {
+    return Column(
+      children: [
+        // Icona locker
+        Container(
+          width: 80,
+          height: 80,
+          decoration: BoxDecoration(
+            color: AppColors.iconBackground(isDark),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Icon(
+            widget.locker.type.icon,
+            size: 40,
+            color: AppColors.primary(isDark),
+          ),
+        ),
+        const SizedBox(height: 24),
+        // Nome e tipo
+        Text(
+          widget.locker.name,
+          style: AppTextStyles.title(isDark).copyWith(fontSize: 24),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          widget.locker.type.label,
+          style: AppTextStyles.bodySecondary(isDark),
+          textAlign: TextAlign.center,
+        ),
+        if (widget.locker.description != null) ...[
+          const SizedBox(height: 16),
+          Text(
+            widget.locker.description!,
+            style: AppTextStyles.body(isDark),
+            textAlign: TextAlign.center,
+          ),
+        ],
+        const SizedBox(height: 16),
+        // Disponibilità
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: AppColors.surface(isDark),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                CupertinoIcons.lock,
+                size: 16,
+                color: AppColors.textSecondary(isDark),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '${widget.locker.availableCells}/${widget.locker.totalCells} celle disponibili',
+                style: AppTextStyles.body(isDark),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSectionHeader({
     required bool isDark,
-    required String label,
-    required String value,
-    IconData? icon,
+    required String title,
+    required IconData icon,
   }) {
     return Row(
       children: [
-        if (icon != null) ...[
-          Icon(
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: AppColors.iconBackground(isDark),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(
             icon,
-            size: 16,
-            color: AppColors.textSecondary(isDark),
-          ),
-          const SizedBox(width: 8),
-        ],
-        Expanded(
-          child: Text(
-            label,
-            style: AppTextStyles.bodySecondary(isDark),
+            size: 20,
+            color: AppColors.primary(isDark),
           ),
         ),
+        const SizedBox(width: 12),
         Text(
-          value,
-          style: AppTextStyles.body(isDark).copyWith(
-            fontWeight: FontWeight.w600,
-          ),
+          title,
+          style: AppTextStyles.title(isDark),
         ),
       ],
     );
   }
 
-  Widget _buildCellTypeSection({
-    required bool isDark,
-    required String title,
-    required String description,
-    required IconData icon,
-    required List<LockerCell> cells,
-    required Function(LockerCell) onCellTap,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: AppColors.iconBackground(isDark),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(
-                icon,
-                size: 20,
-                color: AppColors.primary(isDark),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: AppTextStyles.title(isDark),
-                  ),
-                  Text(
-                    description,
-                    style: AppTextStyles.bodySecondary(isDark).copyWith(fontSize: 12),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        ...cells.map((cell) {
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: _buildCellCard(
-              isDark: isDark,
-              cell: cell,
-              onTap: () => onCellTap(cell),
-            ),
-          );
-        }).toList(),
-        const SizedBox(height: 24),
-      ],
-    );
-  }
-
-  Widget _buildCellCard({
+  Widget _buildBorrowCellCard({
     required bool isDark,
     required LockerCell cell,
-    required VoidCallback onTap,
   }) {
-    return CupertinoButton(
-      padding: EdgeInsets.zero,
-      onPressed: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: AppColors.surface(isDark),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: AppColors.borderColor(isDark).withOpacity(0.1),
-            width: 1,
-          ),
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface(isDark),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: AppColors.borderColor(isDark).withOpacity(0.1),
+          width: 1,
         ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Numero cella
+                Text(
+                  cell.cellNumber,
+                  style: AppTextStyles.body(isDark).copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                if (cell.itemName != null) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    cell.itemName!,
+                    style: AppTextStyles.title(isDark).copyWith(fontSize: 18),
+                  ),
+                ],
+                if (cell.itemDescription != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    cell.itemDescription!,
+                    style: AppTextStyles.bodySecondary(isDark),
+                  ),
+                ],
+                if (cell.borrowDuration != null) ...[
+                  const SizedBox(height: 8),
                   Row(
                     children: [
-                      Expanded(
-                        child: Text(
-                          cell.cellNumber,
-                          style: AppTextStyles.body(isDark).copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
+                      Icon(
+                        CupertinoIcons.clock,
+                        size: 14,
+                        color: AppColors.textSecondary(isDark),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Prestito: ${cell.borrowDuration!.inDays} giorni',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSecondary(isDark),
                         ),
                       ),
-                      if (cell.type == CellType.deposit)
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: AppColors.primary(isDark).withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            '€${cell.pricePerDay.toStringAsFixed(2)}/g',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: AppColors.primary(isDark),
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
                     ],
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '${cell.size.label} (${cell.size.dimensions})',
-                    style: TextStyle(
-                      fontSize: 11,
+                ],
+              ],
+            ),
+          ),
+          // Pulsante apri
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: SizedBox(
+              width: double.infinity,
+              child: CupertinoButton.filled(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                borderRadius: BorderRadius.circular(10),
+                onPressed: () => _handleBorrowCell(cell),
+                child: const Text(
+                  'Apri',
+                  style: TextStyle(
+                    color: CupertinoColors.white,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDepositGroupCard({
+    required bool isDark,
+    required CellSize size,
+    required List<LockerCell> cells,
+  }) {
+    // Prendi la prima cella come riferimento per prezzo (tutte le celle della stessa dimensione hanno lo stesso prezzo)
+    final referenceCell = cells.first;
+    final availableCount = cells.length;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface(isDark),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: AppColors.borderColor(isDark).withOpacity(0.1),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Dimensione
+                Row(
+                  children: [
+                    Icon(
+                      CupertinoIcons.square_grid_2x2,
+                      size: 20,
+                      color: AppColors.primary(isDark),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      size.label,
+                      style: AppTextStyles.title(isDark).copyWith(fontSize: 18),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  size.dimensions,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: AppColors.textSecondary(isDark),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                // Disponibilità
+                Row(
+                  children: [
+                    Icon(
+                      CupertinoIcons.lock,
+                      size: 16,
                       color: AppColors.textSecondary(isDark),
                     ),
-                  ),
-                  if (cell.itemName != null) ...[
-                    const SizedBox(height: 6),
+                    const SizedBox(width: 8),
                     Text(
-                      cell.itemName!,
+                      '$availableCount ${availableCount == 1 ? 'cella disponibile' : 'celle disponibili'}',
                       style: AppTextStyles.body(isDark),
                     ),
                   ],
-                  if (cell.itemDescription != null) ...[
-                    const SizedBox(height: 2),
+                ),
+                const SizedBox(height: 12),
+                // Costo
+                Row(
+                  children: [
+                    Icon(
+                      CupertinoIcons.money_dollar_circle,
+                      size: 16,
+                      color: AppColors.textSecondary(isDark),
+                    ),
+                    const SizedBox(width: 8),
                     Text(
-                      cell.itemDescription!,
-                      style: AppTextStyles.bodySecondary(isDark).copyWith(fontSize: 12),
+                      '€${referenceCell.pricePerDay.toStringAsFixed(2)}/giorno o €${referenceCell.pricePerHour.toStringAsFixed(2)}/ora',
+                      style: AppTextStyles.body(isDark).copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.primary(isDark),
+                      ),
                     ),
                   ],
-                  if (cell.storeName != null) ...[
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Icon(
-                          CupertinoIcons.bag,
-                          size: 12,
-                          color: AppColors.textSecondary(isDark),
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          cell.storeName!,
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: AppColors.textSecondary(isDark),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                  if (cell.borrowDuration != null) ...[
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Icon(
-                          CupertinoIcons.clock,
-                          size: 12,
-                          color: AppColors.textSecondary(isDark),
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Prestito: ${cell.borrowDuration!.inDays} giorni',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: AppColors.textSecondary(isDark),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ],
+                ),
+              ],
+            ),
+          ),
+          // Pulsante affitta
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: SizedBox(
+              width: double.infinity,
+              child: CupertinoButton.filled(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                borderRadius: BorderRadius.circular(10),
+                onPressed: () => _handleDepositCell(referenceCell),
+                child: const Text(
+                  'Affitta',
+                  style: TextStyle(
+                    color: CupertinoColors.white,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                ),
               ),
             ),
-            Icon(
-              CupertinoIcons.chevron_right,
-              color: AppColors.textSecondary(isDark),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 }
+

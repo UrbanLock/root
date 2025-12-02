@@ -51,4 +51,8 @@ class AppColors {
       isDark ? const Color(0xFF48484A) : const Color(0xFFC7C7CC);
   static Color borderColor(bool isDark) =>
       isDark ? const Color(0xFF48484A) : const Color(0xFFC7C7CC);
+  
+  // Colore success (verde)
+  static Color success(bool isDark) =>
+      isDark ? const Color(0xFF34C759) : const Color(0xFF34C759);
 }
