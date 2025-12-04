@@ -17,18 +17,22 @@ import 'package:app/core/styles/app_text_styles.dart';
 /// - POST /api/v1/reports con: lockerId, cellId, category, description, photo, userId
 class ReportIssuePage extends StatefulWidget {
   final ThemeManager themeManager;
-  final String lockerId;
-  final String lockerName;
+  final String? lockerId;
+  final String? lockerName;
   final String? cellId;
   final String? cellNumber;
+  final String? reportId; // ID della segnalazione da modificare
+  final Map<String, dynamic>? existingReport; // Dati esistenti per la modifica
 
   const ReportIssuePage({
     super.key,
     required this.themeManager,
-    required this.lockerId,
-    required this.lockerName,
+    this.lockerId,
+    this.lockerName,
     this.cellId,
     this.cellNumber,
+    this.reportId,
+    this.existingReport,
   });
 
   @override
@@ -52,6 +56,39 @@ class _ReportIssuePageState extends State<ReportIssuePage> {
     {'id': 'damaged_locker', 'label': 'Locker danneggiato'},
     {'id': 'other', 'label': 'Altro'},
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    // Se si sta modificando, pre-compila i campi
+    if (widget.existingReport != null) {
+      final report = widget.existingReport!;
+      _descriptionController.text = report['description'] as String? ?? '';
+      
+      // Mappa la categoria dal label all'id
+      final categoryLabel = report['category'] as String? ?? '';
+      final categoryMap = {
+        'Cella non si apre': 'cell_not_opening',
+        'Cella non si chiude': 'cell_not_closing',
+        'Problema connessione Bluetooth': 'bluetooth_connection',
+        'Cella danneggiata': 'damaged_cell',
+        'Locker danneggiato': 'damaged_locker',
+        'Altro': 'other',
+      };
+      _selectedCategory = categoryMap[categoryLabel];
+      
+      // Se la categoria non è stata trovata, prova a usare direttamente il valore
+      if (_selectedCategory == null) {
+        // Cerca nell'elenco delle categorie per trovare quella corrispondente
+        for (var cat in _categories) {
+          if (cat['label'] == categoryLabel) {
+            _selectedCategory = cat['id'];
+            break;
+          }
+        }
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -162,16 +199,18 @@ class _ReportIssuePageState extends State<ReportIssuePage> {
       showCupertinoDialog(
         context: context,
         builder: (context) => CupertinoAlertDialog(
-          title: const Text('Segnalazione inviata'),
-          content: const Text(
-            'La tua segnalazione è stata inviata con successo. Ti contatteremo a breve.',
-          ),
+          title: Text(widget.existingReport != null
+              ? 'Segnalazione modificata'
+              : 'Segnalazione inviata'),
+          content: Text(widget.existingReport != null
+              ? 'Le modifiche alla segnalazione sono state salvate con successo.'
+              : 'La tua segnalazione è stata inviata con successo. Ti contatteremo a breve.'),
           actions: [
             CupertinoDialogAction(
               isDefaultAction: true,
               onPressed: () {
                 Navigator.of(context).pop(); // Chiudi dialog
-                Navigator.of(context).pop(); // Torna alla pagina precedente
+                Navigator.of(context).pop(true); // Torna alla pagina precedente con risultato
               },
               child: const Text('OK'),
             ),
@@ -193,7 +232,9 @@ class _ReportIssuePageState extends State<ReportIssuePage> {
           navigationBar: CupertinoNavigationBar(
             backgroundColor: AppColors.surface(isDark),
             middle: Text(
-              'Segnala problema',
+              widget.existingReport != null
+                  ? 'Modifica segnalazione'
+                  : 'Segnala problema',
               style: AppTextStyles.title(isDark),
             ),
           ),
@@ -220,60 +261,62 @@ class _ReportIssuePageState extends State<ReportIssuePage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Info locker
-                        Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: AppColors.surface(isDark),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Icon(
-                                    CupertinoIcons.location_solid,
-                                    size: 16,
-                                    color: AppColors.textSecondary(isDark),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      widget.lockerName,
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        color: AppColors.text(isDark),
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              if (widget.cellNumber != null) ...[
-                                const SizedBox(height: 8),
+                        // Info locker (solo se presente)
+                        if (widget.lockerName != null) ...[
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: AppColors.surface(isDark),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
                                 Row(
                                   children: [
                                     Icon(
-                                      CupertinoIcons.lock,
+                                      CupertinoIcons.location_solid,
                                       size: 16,
                                       color: AppColors.textSecondary(isDark),
                                     ),
                                     const SizedBox(width: 8),
-                                    Text(
-                                      'Cella ${widget.cellNumber}',
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        color: AppColors.textSecondary(isDark),
+                                    Expanded(
+                                      child: Text(
+                                        widget.lockerName!,
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          color: AppColors.text(isDark),
+                                          fontWeight: FontWeight.w500,
+                                        ),
                                       ),
                                     ),
                                   ],
                                 ),
+                                if (widget.cellNumber != null) ...[
+                                  const SizedBox(height: 8),
+                                  Row(
+                                    children: [
+                                      Icon(
+                                        CupertinoIcons.lock,
+                                        size: 16,
+                                        color: AppColors.textSecondary(isDark),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        'Cella ${widget.cellNumber}',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          color: AppColors.textSecondary(isDark),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
                               ],
-                            ],
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 32),
+                          const SizedBox(height: 32),
+                        ],
                         
                         // Categoria
                         Text(
@@ -471,9 +514,11 @@ class _ReportIssuePageState extends State<ReportIssuePage> {
                             padding: const EdgeInsets.symmetric(vertical: 16),
                             borderRadius: BorderRadius.circular(12),
                             onPressed: _submitReport,
-                            child: const Text(
-                              'Invia segnalazione',
-                              style: TextStyle(
+                            child: Text(
+                              widget.existingReport != null
+                                  ? 'Salva modifiche'
+                                  : 'Invia segnalazione',
+                              style: const TextStyle(
                                 color: CupertinoColors.white,
                                 fontWeight: FontWeight.w600,
                                 fontSize: 16,
@@ -490,4 +535,5 @@ class _ReportIssuePageState extends State<ReportIssuePage> {
     );
   }
 }
+
 

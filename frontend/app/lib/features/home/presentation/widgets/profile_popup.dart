@@ -126,16 +126,16 @@ class ProfilePopup extends StatelessWidget {
                 _buildMenuItem(
                   context: context,
                   isDark: isDark,
-                  icon: CupertinoIcons.exclamationmark_triangle,
-                  title: 'Segnalazioni',
-                  onTap: onReportsTap,
+                  icon: CupertinoIcons.gift,
+                  title: 'Donare un oggetto',
+                  onTap: onDonateTap,
                 ),
                 _buildMenuItem(
                   context: context,
                   isDark: isDark,
-                  icon: CupertinoIcons.gift,
-                  title: 'Donare un oggetto',
-                  onTap: onDonateTap,
+                  icon: CupertinoIcons.exclamationmark_triangle,
+                  title: 'Segnalazioni',
+                  onTap: onReportsTap,
                 ),
                 _buildMenuItem(
                   context: context,

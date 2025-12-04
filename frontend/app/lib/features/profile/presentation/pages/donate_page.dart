@@ -1,10 +1,23 @@
-import 'dart:io';
 import 'package:flutter/cupertino.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:app/core/theme/theme_manager.dart';
 import 'package:app/core/styles/app_colors.dart';
 import 'package:app/core/styles/app_text_styles.dart';
+import 'package:app/features/profile/presentation/pages/donate_form_page.dart';
+import 'package:app/features/profile/presentation/pages/donation_detail_page.dart';
 
+/// Pagina che mostra lo storico delle donazioni e permette di effettuare una nuova donazione
+/// 
+/// Mostra tutte le donazioni effettuate dall'utente con:
+/// - Foto dell'oggetto
+/// - Nome dell'oggetto
+/// - Categoria
+/// - Data di donazione
+/// - Stato (in attesa, pubblicata, ecc.)
+/// 
+/// **TODO quando il backend sarà pronto:**
+/// - Caricare storico dal backend (GET /api/v1/donations)
+/// - Paginazione per grandi quantità di dati
+/// - Filtri per categoria e stato
 class DonatePage extends StatefulWidget {
   final ThemeManager themeManager;
 
@@ -18,125 +31,137 @@ class DonatePage extends StatefulWidget {
 }
 
 class _DonatePageState extends State<DonatePage> {
-  final TextEditingController _itemController = TextEditingController();
-  final TextEditingController _descriptionController = TextEditingController();
-  final ImagePicker _imagePicker = ImagePicker();
-  File? _selectedImage;
-  String? _selectedCategory;
-  bool _isSubmitting = false;
+  // ⚠️ SOLO PER TESTING: Dati mock
+  // IN PRODUZIONE: Caricare dal backend
+  List<Map<String, dynamic>> _donations = [
+    {
+      'id': '1',
+      'itemName': 'Bicicletta da città',
+      'category': 'Sport',
+      'description': 'Bicicletta in ottime condizioni, usata poco. Include luci e campanello.',
+      'date': DateTime.now().subtract(const Duration(days: 3)),
+      'status': 'confermata',
+      'hasPhoto': true,
+      'rejectionReason': null,
+    },
+    {
+      'id': '2',
+      'itemName': 'Libri di narrativa',
+      'category': 'Libri',
+      'description': 'Collezione di libri di narrativa italiana contemporanea.',
+      'date': DateTime.now().subtract(const Duration(days: 10)),
+      'status': 'in_attesa',
+      'hasPhoto': true,
+      'rejectionReason': null,
+    },
+    {
+      'id': '3',
+      'itemName': 'Gioco da tavolo',
+      'category': 'Giochi',
+      'description': 'Gioco da tavolo completo, tutte le pedine presenti.',
+      'date': DateTime.now().subtract(const Duration(days: 15)),
+      'status': 'rifiutata',
+      'hasPhoto': false,
+      'rejectionReason': 'L\'oggetto non rispetta i criteri di qualità richiesti per le donazioni.',
+    },
+    {
+      'id': '4',
+      'itemName': 'Vestiti usati',
+      'category': 'Altro',
+      'description': 'Vestiti in buone condizioni.',
+      'date': DateTime.now().subtract(const Duration(days: 20)),
+      'status': 'rifiutata',
+      'hasPhoto': true,
+      'rejectionReason': null, // Nessun motivo specifico
+    },
+    {
+      'id': '5',
+      'itemName': 'Set di pentole',
+      'category': 'Altro',
+      'description': 'Set completo di pentole in acciaio inox.',
+      'date': DateTime.now().subtract(const Duration(days: 5)),
+      'status': 'consegnata',
+      'hasPhoto': true,
+      'rejectionReason': null,
+    },
+  ];
 
-  @override
-  void dispose() {
-    _itemController.dispose();
-    _descriptionController.dispose();
-    super.dispose();
-  }
+  bool _isLoading = false;
 
-  Future<void> _takePhoto() async {
-    try {
-      final XFile? image = await _imagePicker.pickImage(
-        source: ImageSource.camera,
-        imageQuality: 85,
-      );
-      if (image != null) {
-        setState(() {
-          _selectedImage = File(image.path);
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        showCupertinoDialog(
-          context: context,
-          builder: (context) => CupertinoAlertDialog(
-            title: const Text('Errore'),
-            content: Text('Impossibile scattare la foto: $e'),
-            actions: [
-              CupertinoDialogAction(
-                isDefaultAction: true,
-                child: const Text('OK'),
-                onPressed: () => Navigator.of(context).pop(),
-              ),
-            ],
-          ),
-        );
-      }
+  String _getStatusLabel(String status) {
+    switch (status) {
+      case 'in_attesa':
+        return 'In attesa di verifica';
+      case 'confermata':
+        return 'Confermata';
+      case 'consegnata':
+        return 'Consegnata';
+      case 'rifiutata':
+        return 'Rifiutata';
+      default:
+        return 'Sconosciuto';
     }
   }
 
-  void _submitDonation() {
-    final isDark = widget.themeManager.isDarkMode;
-
-    // Validazione: foto obbligatoria
-    if (_selectedImage == null) {
-      showCupertinoDialog(
-        context: context,
-        builder: (context) => CupertinoAlertDialog(
-          title: const Text('Foto richiesta'),
-          content: const Text(
-            'È obbligatorio scattare una foto all\'oggetto che vuoi donare.',
-          ),
-          actions: [
-            CupertinoDialogAction(
-              isDefaultAction: true,
-              child: const Text('OK'),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-          ],
-        ),
-      );
-      return;
+  Color _getStatusColor(String status, bool isDark) {
+    switch (status) {
+      case 'in_attesa':
+        return AppColors.primary(isDark);
+      case 'confermata':
+        return CupertinoColors.systemGreen;
+      case 'consegnata':
+        return CupertinoColors.systemPurple;
+      case 'rifiutata':
+        return CupertinoColors.systemRed;
+      default:
+        return AppColors.textSecondary(isDark);
     }
+  }
 
-    // Validazione: nome oggetto
-    if (_itemController.text.trim().isEmpty) {
-      showCupertinoDialog(
-        context: context,
-        builder: (context) => CupertinoAlertDialog(
-          title: const Text('Campo obbligatorio'),
-          content: const Text('Inserisci il nome dell\'oggetto che vuoi donare.'),
-          actions: [
-            CupertinoDialogAction(
-              isDefaultAction: true,
-              child: const Text('OK'),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-          ],
-        ),
-      );
-      return;
+  String _formatDate(DateTime date) {
+    final now = DateTime.now();
+    final difference = now.difference(date);
+
+    if (difference.inDays == 0) {
+      return 'Oggi';
+    } else if (difference.inDays == 1) {
+      return 'Ieri';
+    } else if (difference.inDays < 7) {
+      return '${difference.inDays} giorni fa';
+    } else {
+      return '${date.day}/${date.month}/${date.year}';
     }
+  }
 
-    setState(() {
-      _isSubmitting = true;
-    });
+  void _createNewDonation() async {
+    final result = await Navigator.of(context).push(
+      CupertinoPageRoute(
+        builder: (context) => DonateFormPage(
+          themeManager: widget.themeManager,
+        ),
+      ),
+    );
 
-    // Simula invio (TODO: implementare chiamata API)
-    Future.delayed(const Duration(seconds: 1), () {
-      if (mounted) {
-        setState(() {
-          _isSubmitting = false;
-        });
-        showCupertinoDialog(
-          context: context,
-          builder: (context) => CupertinoAlertDialog(
-            title: const Text('Donazione inviata'),
-            content: const Text(
-              'La tua donazione è stata registrata. Verrà esaminata e pubblicata a breve.',
-            ),
-            actions: [
-              CupertinoDialogAction(
-                isDefaultAction: true,
-                child: const Text('OK'),
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  Navigator.of(context).pop();
-                },
-              ),
-            ],
-          ),
+    // Se la donazione è stata inviata con successo, aggiungi alla lista
+    if (result == true) {
+      // ⚠️ SOLO PER TESTING: Aggiungi una donazione mock
+      // IN PRODUZIONE: Ricarica dal backend
+      setState(() {
+        _donations.insert(
+          0,
+          {
+            'id': DateTime.now().millisecondsSinceEpoch.toString(),
+            'itemName': 'Nuovo oggetto donato',
+            'category': 'Altro',
+            'description': 'Nuova donazione effettuata',
+            'date': DateTime.now(),
+            'status': 'in_attesa',
+            'hasPhoto': true,
+            'rejectionReason': null,
+          },
         );
-      }
-    });
+      });
+    }
   }
 
   @override
@@ -156,317 +181,326 @@ class _DonatePageState extends State<DonatePage> {
             ),
           ),
           child: SafeArea(
-            bottom: false,
-            child: ListView(
-              padding: const EdgeInsets.only(bottom: 100),
-              children: [
-                // Header informativo
-                Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(
-                        CupertinoIcons.gift_fill,
-                        size: 48,
-                        color: AppColors.primary(isDark),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Condividi con la comunità',
-                        style: AppTextStyles.title(isDark),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Dona oggetti utili che altri possono utilizzare. Contribuisci a rendere Trento più sostenibile.',
-                        style: AppTextStyles.bodySecondary(isDark),
-                      ),
-                    ],
-                  ),
-                ),
-                // Form donazione
-                Container(
-                  color: AppColors.surface(isDark),
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Foto obbligatoria
-                      Text(
-                        'Foto dell\'oggetto *',
-                        style: AppTextStyles.body(isDark),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Scatta una foto all\'oggetto che vuoi donare',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: AppColors.textSecondary(isDark),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      GestureDetector(
-                        onTap: _takePhoto,
-                        child: Container(
-                          width: double.infinity,
-                          height: 200,
-                          decoration: BoxDecoration(
-                            color: AppColors.background(isDark),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: _selectedImage == null
-                                  ? CupertinoColors.systemRed
-                                  : AppColors.borderColor(isDark),
-                              width: _selectedImage == null ? 2 : 1,
-                            ),
-                          ),
-                          child: _selectedImage != null
-                              ? ClipRRect(
-                                  borderRadius: BorderRadius.circular(12),
-                                  child: Image.file(
-                                    _selectedImage!,
-                                    fit: BoxFit.cover,
-                                  ),
-                                )
-                              : Column(
+            child: _isLoading
+                ? const Center(child: CupertinoActivityIndicator())
+                : _donations.isEmpty
+                    ? Column(
+                        children: [
+                          Expanded(
+                            child: Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(40),
+                                child: Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
                                     Icon(
-                                      CupertinoIcons.camera_fill,
-                                      size: 48,
-                                      color: _selectedImage == null
-                                          ? CupertinoColors.systemRed
-                                          : AppColors.textSecondary(isDark),
+                                      CupertinoIcons.gift,
+                                      size: 64,
+                                      color: AppColors.textSecondary(isDark).withOpacity(0.5),
                                     ),
-                                    const SizedBox(height: 12),
+                                    const SizedBox(height: 24),
                                     Text(
-                                      'Tocca per scattare una foto',
-                                      style: TextStyle(
-                                        color: _selectedImage == null
-                                            ? CupertinoColors.systemRed
-                                            : AppColors.textSecondary(isDark),
-                                        fontWeight: FontWeight.w500,
-                                      ),
+                                      'Nessuna donazione',
+                                      style: AppTextStyles.title(isDark),
                                     ),
-                                    if (_selectedImage == null) ...[
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        'Obbligatorio',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: CupertinoColors.systemRed,
-                                        ),
-                                      ),
-                                    ],
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      'Le tue donazioni appariranno qui',
+                                      style: AppTextStyles.bodySecondary(isDark),
+                                      textAlign: TextAlign.center,
+                                    ),
                                   ],
                                 ),
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      Text(
-                        'Cosa vuoi donare? *',
-                        style: AppTextStyles.body(isDark),
-                      ),
-                      const SizedBox(height: 12),
-                      CupertinoTextField(
-                        controller: _itemController,
-                        placeholder: 'Es. Attrezzatura sportiva, libri, giochi...',
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 12,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.background(isDark),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: AppColors.borderColor(isDark),
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      Text(
-                        'Descrizione',
-                        style: AppTextStyles.body(isDark),
-                      ),
-                      const SizedBox(height: 12),
-                      CupertinoTextField(
-                        controller: _descriptionController,
-                        placeholder: 'Descrivi l\'oggetto e le sue condizioni...',
-                        maxLines: 4,
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: AppColors.background(isDark),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: AppColors.borderColor(isDark),
+                          // Pulsante nuova donazione fisso in fondo
+                          Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: CupertinoButton.filled(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              borderRadius: BorderRadius.circular(12),
+                              onPressed: _createNewDonation,
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(
+                                    CupertinoIcons.add_circled_solid,
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  const Text(
+                                    'Nuova donazione',
+                                    style: TextStyle(
+                                      color: CupertinoColors.white,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      Text(
-                        'Seleziona categoria',
-                        style: AppTextStyles.body(isDark),
-                      ),
-                      const SizedBox(height: 12),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
+                        ],
+                      )
+                    : Column(
                         children: [
-                          _buildCategoryChip(
-                            isDark: isDark,
-                            label: 'Sport',
-                            icon: CupertinoIcons.sportscourt,
-                            isSelected: _selectedCategory == 'Sport',
-                            onTap: () {
-                              setState(() {
-                                _selectedCategory = 'Sport';
-                              });
-                            },
+                          // Lista scrollabile delle donazioni
+                          Expanded(
+                            child: CupertinoScrollbar(
+                              child: CustomScrollView(
+                                slivers: [
+                                  CupertinoSliverRefreshControl(
+                                    onRefresh: () async {
+                                      // TODO: Ricarica donazioni
+                                    },
+                                  ),
+                                  SliverPadding(
+                                    padding: const EdgeInsets.all(20),
+                                    sliver: SliverList(
+                                      delegate: SliverChildBuilderDelegate(
+                                        (context, index) {
+                                          if (index == 0) {
+                                            // Header
+                                            return Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  'Le tue donazioni',
+                                                  style: AppTextStyles.title(isDark),
+                                                ),
+                                                const SizedBox(height: 8),
+                                                Text(
+                                                  'Visualizza la cronologia delle donazioni effettuate',
+                                                  style: AppTextStyles.bodySecondary(isDark),
+                                                ),
+                                                const SizedBox(height: 20),
+                                              ],
+                                            );
+                                          }
+                                          
+                                          final donation = _donations[index - 1];
+                                          
+                                          return _buildDonationCard(
+                                            context: context,
+                                            isDark: isDark,
+                                            donation: donation,
+                                          );
+                                        },
+                                        childCount: _donations.length + 1,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
-                          _buildCategoryChip(
-                            isDark: isDark,
-                            label: 'Libri',
-                            icon: CupertinoIcons.book,
-                            isSelected: _selectedCategory == 'Libri',
-                            onTap: () {
-                              setState(() {
-                                _selectedCategory = 'Libri';
-                              });
-                            },
-                          ),
-                          _buildCategoryChip(
-                            isDark: isDark,
-                            label: 'Giochi',
-                            icon: CupertinoIcons.game_controller,
-                            isSelected: _selectedCategory == 'Giochi',
-                            onTap: () {
-                              setState(() {
-                                _selectedCategory = 'Giochi';
-                              });
-                            },
-                          ),
-                          _buildCategoryChip(
-                            isDark: isDark,
-                            label: 'Altro',
-                            icon: CupertinoIcons.ellipsis,
-                            isSelected: _selectedCategory == 'Altro',
-                            onTap: () {
-                              setState(() {
-                                _selectedCategory = 'Altro';
-                              });
-                            },
+                          // Pulsante nuova donazione fisso in fondo
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: AppColors.background(isDark),
+                              border: Border(
+                                top: BorderSide(
+                                  color: AppColors.borderColor(isDark).withOpacity(0.1),
+                                ),
+                              ),
+                            ),
+                            child: SafeArea(
+                              top: false,
+                              child: CupertinoButton.filled(
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                borderRadius: BorderRadius.circular(12),
+                                onPressed: _createNewDonation,
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Icon(
+                                      CupertinoIcons.add_circled_solid,
+                                      size: 20,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    const Text(
+                                      'Nuova donazione',
+                                      style: TextStyle(
+                                        color: CupertinoColors.white,
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 32),
-                      SizedBox(
-                        width: double.infinity,
-                        child: CupertinoButton.filled(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          borderRadius: BorderRadius.circular(12),
-                          onPressed: _isSubmitting ? null : _submitDonation,
-                          child: _isSubmitting
-                              ? const CupertinoActivityIndicator(
-                                  color: CupertinoColors.white,
-                                )
-                              : const Text(
-                                  'Invia donazione',
-                                  style: TextStyle(
-                                    color: CupertinoColors.white,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 20),
-                // Info
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary(isDark).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          CupertinoIcons.info_circle,
-                          color: AppColors.primary(isDark),
-                          size: 20,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            'Gli oggetti donati saranno disponibili per tutti gli utenti della comunità.',
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: AppColors.text(isDark),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
           ),
         );
       },
     );
   }
 
-  Widget _buildCategoryChip({
+  Widget _buildDonationCard({
+    required BuildContext context,
     required bool isDark,
-    required String label,
-    required IconData icon,
-    required bool isSelected,
-    required VoidCallback onTap,
+    required Map<String, dynamic> donation,
   }) {
-    return GestureDetector(
-      onTap: onTap,
+    final itemName = donation['itemName'] as String;
+    final category = donation['category'] as String;
+    final date = donation['date'] as DateTime;
+    final status = donation['status'] as String;
+    final statusLabel = _getStatusLabel(status);
+    final statusColor = _getStatusColor(status, isDark);
+
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      onPressed: () {
+        Navigator.of(context).push(
+          CupertinoPageRoute(
+            builder: (context) => DonationDetailPage(
+              themeManager: widget.themeManager,
+              donation: donation,
+            ),
+          ),
+        );
+      },
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        margin: const EdgeInsets.only(bottom: 12),
         decoration: BoxDecoration(
-          color: isSelected
-              ? AppColors.primary(isDark).withOpacity(0.2)
-              : AppColors.background(isDark),
-          borderRadius: BorderRadius.circular(20),
+          color: AppColors.surface(isDark),
+          borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isSelected
-                ? AppColors.primary(isDark)
-                : AppColors.borderColor(isDark),
-            width: isSelected ? 2 : 1,
+            color: AppColors.borderColor(isDark).withOpacity(0.1),
           ),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
           children: [
-            Icon(
-              icon,
-              size: 16,
-              color: isSelected
-                  ? AppColors.primary(isDark)
-                  : AppColors.textSecondary(isDark),
+            // Icona categoria o placeholder foto
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: AppColors.primary(isDark).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                _getCategoryIcon(category),
+                size: 28,
+                color: AppColors.primary(isDark),
+              ),
             ),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 13,
-                color: isSelected
-                    ? AppColors.primary(isDark)
-                    : AppColors.text(isDark),
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    itemName,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.text(isDark),
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Icon(
+                        _getCategoryIcon(category),
+                        size: 12,
+                        color: AppColors.textSecondary(isDark),
+                      ),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          category,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: AppColors.textSecondary(isDark),
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Icon(
+                        CupertinoIcons.calendar,
+                        size: 12,
+                        color: AppColors.textSecondary(isDark),
+                      ),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          _formatDate(date),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textSecondary(isDark),
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  // Badge stato
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: statusColor.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 6,
+                          height: 6,
+                          decoration: BoxDecoration(
+                            color: statusColor,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          statusLabel,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: statusColor,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
         ),
+        ),
       ),
     );
+  }
+
+  IconData _getCategoryIcon(String category) {
+    switch (category) {
+      case 'Sport':
+        return CupertinoIcons.sportscourt;
+      case 'Libri':
+        return CupertinoIcons.book;
+      case 'Giochi':
+        return CupertinoIcons.game_controller;
+      default:
+        return CupertinoIcons.gift;
+    }
   }
 }

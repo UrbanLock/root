@@ -2,6 +2,8 @@ import 'package:flutter/cupertino.dart';
 import 'package:app/core/theme/theme_manager.dart';
 import 'package:app/core/styles/app_colors.dart';
 import 'package:app/core/styles/app_text_styles.dart';
+import 'package:app/features/reports/presentation/pages/report_issue_page.dart';
+import 'package:app/features/reports/presentation/pages/report_detail_page.dart';
 
 /// Pagina che mostra la lista delle segnalazioni inviate dall'utente
 /// 
@@ -32,7 +34,7 @@ class ReportsListPage extends StatefulWidget {
 class _ReportsListPageState extends State<ReportsListPage> {
   // ⚠️ SOLO PER TESTING: Dati mock
   // IN PRODUZIONE: Caricare dal backend
-  final List<Map<String, dynamic>> _reports = [
+  List<Map<String, dynamic>> _reports = [
     {
       'id': '1',
       'lockerName': 'Locker Centrale',
@@ -40,7 +42,6 @@ class _ReportsListPageState extends State<ReportsListPage> {
       'category': 'Cella non si apre',
       'description': 'La cella non si apre quando premo il pulsante. Ho provato più volte ma non funziona.',
       'date': DateTime.now().subtract(const Duration(days: 2)),
-      'status': 'in_elaborazione',
       'hasPhoto': true,
     },
     {
@@ -50,7 +51,6 @@ class _ReportsListPageState extends State<ReportsListPage> {
       'category': 'Cella danneggiata',
       'description': 'La porta della cella è danneggiata e non si chiude correttamente.',
       'date': DateTime.now().subtract(const Duration(days: 5)),
-      'status': 'risolta',
       'hasPhoto': false,
     },
     {
@@ -60,42 +60,11 @@ class _ReportsListPageState extends State<ReportsListPage> {
       'category': 'Problema connessione Bluetooth',
       'description': 'Non riesco a connettermi al locker tramite Bluetooth. Il dispositivo non viene rilevato.',
       'date': DateTime.now().subtract(const Duration(days: 7)),
-      'status': 'risolta',
       'hasPhoto': false,
     },
   ];
 
   bool _isLoading = false;
-
-  String _getStatusLabel(String status) {
-    switch (status) {
-      case 'in_elaborazione':
-        return 'In elaborazione';
-      case 'risolta':
-        return 'Risolta';
-      case 'rifiutata':
-        return 'Rifiutata';
-      default:
-        return 'Sconosciuto';
-    }
-  }
-
-  Color _getStatusColor(String status, bool isDark) {
-    switch (status) {
-      case 'in_elaborazione':
-        return AppColors.primary(isDark);
-      case 'risolta':
-        return AppColors.success(isDark);
-      case 'rifiutata':
-        return CupertinoColors.systemRed;
-      default:
-        return AppColors.textSecondary(isDark);
-    }
-  }
-
-  String _getCategoryLabel(String category) {
-    return category;
-  }
 
   String _formatDate(DateTime date) {
     final now = DateTime.now();
@@ -117,6 +86,56 @@ class _ReportsListPageState extends State<ReportsListPage> {
       return '${date.day}/${date.month}/${date.year}';
     }
   }
+
+
+  void _createNewReport() async {
+    final result = await Navigator.of(context).push(
+      CupertinoPageRoute(
+        builder: (context) => ReportIssuePage(
+          themeManager: widget.themeManager,
+        ),
+      ),
+    );
+
+    // Se la segnalazione è stata inviata con successo, aggiungi alla lista
+    if (result == true) {
+      // ⚠️ SOLO PER TESTING: Aggiungi una segnalazione mock
+      // IN PRODUZIONE: Ricarica dal backend
+      setState(() {
+        _reports.insert(
+          0,
+          {
+            'id': DateTime.now().millisecondsSinceEpoch.toString(),
+            'lockerName': 'Locker Generale',
+            'cellNumber': null,
+            'category': 'Altro',
+            'description': 'Nuova segnalazione inviata',
+            'date': DateTime.now(),
+            'hasPhoto': false,
+          },
+        );
+      });
+    }
+  }
+
+  void _refreshReports() {
+    // ⚠️ SOLO PER TESTING: Ricarica la lista
+    // IN PRODUZIONE: Ricarica dal backend (GET /api/v1/reports)
+    setState(() {
+      // La lista viene aggiornata automaticamente quando si modifica un report
+      // In produzione, qui si farebbe una chiamata API per ricaricare i dati
+    });
+  }
+
+  void _deleteReport(String reportId) {
+    // ⚠️ SOLO PER TESTING: Rimuovi la segnalazione dalla lista locale
+    // IN PRODUZIONE: Cancella dal backend (DELETE /api/v1/reports/{id})
+    setState(() {
+      _reports.removeWhere((r) => r['id'] == reportId);
+    });
+  }
+
+
 
   @override
   Widget build(BuildContext context) {
@@ -140,45 +159,128 @@ class _ReportsListPageState extends State<ReportsListPage> {
                     child: CupertinoActivityIndicator(radius: 20),
                   )
                 : _reports.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              CupertinoIcons.exclamationmark_triangle,
-                              size: 60,
-                              color: AppColors.textSecondary(isDark),
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              'Nessuna segnalazione',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.text(isDark),
+                    ? Column(
+                        children: [
+                          Expanded(
+                            child: Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    CupertinoIcons.exclamationmark_triangle,
+                                    size: 60,
+                                    color: AppColors.textSecondary(isDark),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    'Nessuna segnalazione',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.text(isDark),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Le tue segnalazioni appariranno qui',
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      color: AppColors.textSecondary(isDark),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Le tue segnalazioni appariranno qui',
-                              style: TextStyle(
-                                fontSize: 15,
-                                color: AppColors.textSecondary(isDark),
+                          ),
+                          // Pulsante nuova segnalazione fisso in fondo
+                          Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: CupertinoButton.filled(
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 14,
+                              ),
+                              borderRadius: BorderRadius.circular(12),
+                              onPressed: _createNewReport,
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(
+                                    CupertinoIcons.add_circled_solid,
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  const Text(
+                                    'Nuova segnalazione',
+                                    style: TextStyle(
+                                      color: CupertinoColors.white,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       )
-                    : CupertinoScrollbar(
-                        child: ListView(
-                          padding: const EdgeInsets.all(16),
-                          children: [
-                            ..._reports.map((report) => _buildReportCard(
-                                  report,
-                                  isDark,
-                                )),
-                          ],
-                        ),
+                    : Column(
+                        children: [
+                          // Lista scrollabile delle segnalazioni
+                          Expanded(
+                            child: CupertinoScrollbar(
+                              child: ListView(
+                                padding: const EdgeInsets.all(16),
+                                children: [
+                                  ..._reports.map((report) =>
+                                      _buildReportCard(report, isDark)),
+                                  // Spazio extra in fondo per il pulsante
+                                  const SizedBox(height: 80),
+                                ],
+                              ),
+                            ),
+                          ),
+                          // Pulsante nuova segnalazione fisso in fondo
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: AppColors.background(isDark),
+                              border: Border(
+                                top: BorderSide(
+                                  color: AppColors.borderColor(isDark)
+                                      .withOpacity(0.1),
+                                ),
+                              ),
+                            ),
+                            child: SafeArea(
+                              top: false,
+                              child: CupertinoButton.filled(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 14,
+                                ),
+                                borderRadius: BorderRadius.circular(12),
+                                onPressed: _createNewReport,
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Icon(
+                                      CupertinoIcons.add_circled_solid,
+                                      size: 20,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    const Text(
+                                      'Nuova segnalazione',
+                                      style: TextStyle(
+                                        color: CupertinoColors.white,
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
           ),
         );
@@ -187,9 +289,6 @@ class _ReportsListPageState extends State<ReportsListPage> {
   }
 
   Widget _buildReportCard(Map<String, dynamic> report, bool isDark) {
-    final status = report['status'] as String;
-    final statusLabel = _getStatusLabel(status);
-    final statusColor = _getStatusColor(status, isDark);
     final category = report['category'] as String;
     final description = report['description'] as String;
     final date = report['date'] as DateTime;
@@ -208,8 +307,26 @@ class _ReportsListPageState extends State<ReportsListPage> {
       ),
       child: CupertinoButton(
         padding: EdgeInsets.zero,
-        onPressed: () {
-          // TODO: Navigare a pagina dettaglio segnalazione
+        onPressed: () async {
+          final result = await Navigator.of(context).push(
+            CupertinoPageRoute(
+              builder: (context) => ReportDetailPage(
+                themeManager: widget.themeManager,
+                report: report,
+                onReportDeleted: () {
+                  _deleteReport(report['id'] as String);
+                },
+                onReportUpdated: () {
+                  _refreshReports();
+                },
+              ),
+            ),
+          );
+          
+          // Se la segnalazione è stata modificata o cancellata, aggiorna la lista
+          if (result == true) {
+            _refreshReports();
+          }
         },
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -268,25 +385,6 @@ class _ReportsListPageState extends State<ReportsListPage> {
                           ],
                         ),
                       ],
-                    ),
-                  ),
-                  // Badge stato
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: statusColor.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      statusLabel,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: statusColor,
-                      ),
                     ),
                   ),
                 ],

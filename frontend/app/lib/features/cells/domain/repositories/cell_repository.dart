@@ -51,3 +51,4 @@ abstract class CellRepository {
   Future<ActiveCell> requestCell(String lockerId, {String? photoBase64});
 }
 
+

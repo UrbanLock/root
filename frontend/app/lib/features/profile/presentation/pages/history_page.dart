@@ -5,6 +5,7 @@ import 'package:app/core/styles/app_colors.dart';
 import 'package:app/core/styles/app_text_styles.dart';
 import 'package:app/core/di/app_dependencies.dart';
 import 'package:app/features/cells/domain/models/active_cell.dart';
+import 'package:app/features/reports/presentation/pages/report_issue_page.dart';
 
 /// Pagina che mostra lo storico delle celle utilizzate
 /// 
@@ -221,19 +222,10 @@ class _HistoryPageState extends State<HistoryPage> {
                                       final cell = _history[index - 1];
                                       final isLast = index == _history.length;
                                       
-                                      return Column(
-                                        children: [
-                                          _buildHistoryItem(
-                                            context: context,
-                                            isDark: isDark,
-                                            cell: cell,
-                                          ),
-                                          if (!isLast)
-                                            Divider(
-                                              height: 1,
-                                              color: AppColors.borderColor(isDark).withOpacity(0.1),
-                                            ),
-                                        ],
+                                      return _buildHistoryItem(
+                                        context: context,
+                                        isDark: isDark,
+                                        cell: cell,
                                       );
                                     },
                                     childCount: _history.length + 1,
@@ -253,81 +245,205 @@ class _HistoryPageState extends State<HistoryPage> {
     required bool isDark,
     required ActiveCell cell,
   }) {
-    return CupertinoButton(
-      padding: EdgeInsets.zero,
-      onPressed: () {
-        // TODO: Mostra dettagli utilizzo
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        child: Row(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: AppColors.iconBackground(isDark),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(
-                _getIconForType(cell.type),
-                size: 24,
-                color: AppColors.primary(isDark),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: AppColors.surface(isDark),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: AppColors.borderColor(isDark).withOpacity(0.1),
+        ),
+      ),
+      child: Stack(
+        children: [
+          CupertinoButton(
+            padding: EdgeInsets.zero,
+            onPressed: () {
+              // TODO: Mostra dettagli utilizzo
+            },
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 50, 16), // Padding extra a destra per il pulsante
+              child: Row(
                 children: [
-                  Text(
-                    cell.lockerName,
-                    style: AppTextStyles.body(isDark),
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: AppColors.primary(isDark).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      _getIconForType(cell.type),
+                      size: 28,
+                      color: AppColors.primary(isDark),
+                    ),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${_getTypeLabel(cell.type)} • ${cell.cellNumber}',
-                    style: AppTextStyles.bodySecondary(isDark),
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Icon(
-                        CupertinoIcons.calendar,
-                        size: 12,
-                        color: AppColors.textSecondary(isDark),
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${_formatDate(cell.startTime)} • ${_formatTime(cell.startTime)}',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: AppColors.textSecondary(isDark),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          cell.lockerName,
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.text(isDark),
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            Icon(
+                              _getIconForType(cell.type),
+                              size: 12,
+                              color: AppColors.textSecondary(isDark),
+                            ),
+                            const SizedBox(width: 4),
+                            Flexible(
+                              child: Text(
+                                _getTypeLabel(cell.type),
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: AppColors.textSecondary(isDark),
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Container(
+                              width: 3,
+                              height: 3,
+                              decoration: BoxDecoration(
+                                color: AppColors.textSecondary(isDark),
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Icon(
+                              CupertinoIcons.lock,
+                              size: 12,
+                              color: AppColors.textSecondary(isDark),
+                            ),
+                            const SizedBox(width: 4),
+                            Flexible(
+                              child: Text(
+                                cell.cellNumber,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: AppColors.textSecondary(isDark),
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            Icon(
+                              CupertinoIcons.calendar,
+                              size: 12,
+                              color: AppColors.textSecondary(isDark),
+                            ),
+                            const SizedBox(width: 4),
+                            Flexible(
+                              child: Text(
+                                '${_formatDate(cell.startTime)} • ${_formatTime(cell.startTime)}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.textSecondary(isDark),
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        // Badge completato in verde
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: CupertinoColors.systemGreen.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                CupertinoIcons.check_mark_circled_solid,
+                                size: 12,
+                                color: CupertinoColors.systemGreen,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Completato',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: CupertinoColors.systemGreen,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
             ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: AppColors.primary(isDark).withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                'Completato',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: AppColors.primary(isDark),
-                  fontWeight: FontWeight.w600,
+          ),
+          // Pulsante segnala problema in alto a destra
+          Positioned(
+            top: 8,
+            right: 8,
+            child: CupertinoButton(
+              padding: EdgeInsets.zero,
+              minSize: 0,
+              onPressed: () {
+                Navigator.of(context).push(
+                  CupertinoPageRoute(
+                    builder: (context) => ReportIssuePage(
+                      themeManager: widget.themeManager,
+                      lockerId: cell.lockerId,
+                      lockerName: cell.lockerName,
+                      cellId: cell.cellId,
+                      cellNumber: cell.cellNumber,
+                    ),
+                  ),
+                );
+              },
+              child: Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: AppColors.surface(isDark),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: AppColors.borderColor(isDark).withOpacity(0.2),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Icon(
+                  CupertinoIcons.exclamationmark_triangle,
+                  size: 16,
+                  color: CupertinoColors.systemOrange,
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
+
 }
