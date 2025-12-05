@@ -330,8 +330,6 @@ class HelpPage extends StatelessWidget {
                       fontWeight: FontWeight.w600,
                       color: AppColors.text(isDark),
                     ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 4),
                   Text(
@@ -393,15 +391,11 @@ class HelpPage extends StatelessWidget {
                   Text(
                     title,
                     style: AppTextStyles.body(isDark),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 2),
                   Text(
                     subtitle,
                     style: AppTextStyles.bodySecondary(isDark),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),

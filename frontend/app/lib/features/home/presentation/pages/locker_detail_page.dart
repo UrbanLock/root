@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
 import 'package:app/core/theme/theme_manager.dart';
 import 'package:app/core/styles/app_colors.dart';
 import 'package:app/core/styles/app_text_styles.dart';
@@ -6,6 +7,7 @@ import 'package:app/core/di/app_dependencies.dart';
 import 'package:app/features/lockers/domain/models/locker.dart';
 import 'package:app/features/lockers/domain/models/locker_cell.dart';
 import 'package:app/features/lockers/domain/models/cell_type.dart';
+import 'package:app/features/lockers/data/cell_item_icons.dart';
 import 'package:app/features/profile/presentation/pages/open_cell_page.dart';
 import 'package:app/features/auth/presentation/pages/login_page.dart';
 import 'package:app/features/payment/presentation/pages/deposit_payment_page.dart';
@@ -382,7 +384,7 @@ class _LockerDetailPageState extends State<LockerDetailPage> {
                             children: [
                               // Header con info locker
                               _buildLockerHeader(isDark),
-                              const SizedBox(height: 32),
+                              const SizedBox(height: 20),
                               // Sezione celle per prestito
                               if (_cells.any((c) => c.type == CellType.borrow)) ...[
                                 _buildSectionHeader(
@@ -391,15 +393,29 @@ class _LockerDetailPageState extends State<LockerDetailPage> {
                                   icon: CellType.borrow.icon,
                                 ),
                                 const SizedBox(height: 12),
-                                ..._cells
-                                    .where((c) => c.type == CellType.borrow)
-                                    .map((cell) => Padding(
-                                          padding: const EdgeInsets.only(bottom: 12),
-                                          child: _buildBorrowCellCard(
+                                // Griglia di quadrati con simboli
+                                Wrap(
+                                  spacing: 12,
+                                  runSpacing: 12,
+                                  alignment: WrapAlignment.start,
+                                  children: _cells
+                                      .where((c) => c.type == CellType.borrow)
+                                      .map((cell) => _buildBorrowCellSquare(
                                             isDark: isDark,
                                             cell: cell,
-                                          ),
-                                        )),
+                                          ))
+                                      .toList(),
+                                ),
+                              ],
+                              // Separatore minimal tra sezioni
+                              if (_cells.any((c) => c.type == CellType.borrow) && 
+                                  _cells.any((c) => c.type == CellType.deposit)) ...[
+                                const SizedBox(height: 32),
+                                Container(
+                                  height: 1,
+                                  margin: const EdgeInsets.symmetric(horizontal: 20),
+                                  color: AppColors.borderColor(isDark).withOpacity(0.2),
+                                ),
                                 const SizedBox(height: 32),
                               ],
                               // Sezione celle per deposito (raggruppate per dimensione)
@@ -410,16 +426,19 @@ class _LockerDetailPageState extends State<LockerDetailPage> {
                                   icon: CellType.deposit.icon,
                                 ),
                                 const SizedBox(height: 12),
-                                ..._groupDepositCellsBySize().entries.map((entry) {
-                                  return Padding(
-                                    padding: const EdgeInsets.only(bottom: 12),
-                                    child: _buildDepositGroupCard(
+                                // Griglia di quadrati raggruppati per dimensione
+                                Wrap(
+                                  spacing: 12,
+                                  runSpacing: 12,
+                                  alignment: WrapAlignment.start,
+                                  children: _groupDepositCellsBySize().entries.map((entry) {
+                                    return _buildDepositGroupSquare(
                                       isDark: isDark,
                                       size: entry.key,
                                       cells: entry.value,
-                                    ),
-                                  );
-                                }),
+                                    );
+                                  }).toList(),
+                                ),
                               ],
                             ],
                           ),
@@ -434,46 +453,48 @@ class _LockerDetailPageState extends State<LockerDetailPage> {
       children: [
         // Icona locker
         Container(
-          width: 80,
-          height: 80,
+          width: 60,
+          height: 60,
           decoration: BoxDecoration(
             color: AppColors.iconBackground(isDark),
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(15),
           ),
           child: Icon(
             widget.locker.type.icon,
-            size: 40,
+            size: 30,
             color: AppColors.primary(isDark),
           ),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 12),
         // Nome e tipo
         Text(
           widget.locker.name,
-          style: AppTextStyles.title(isDark).copyWith(fontSize: 24),
+          style: AppTextStyles.title(isDark).copyWith(fontSize: 20),
           textAlign: TextAlign.center,
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 4),
         Text(
           widget.locker.type.label,
-          style: AppTextStyles.bodySecondary(isDark),
+          style: AppTextStyles.bodySecondary(isDark).copyWith(fontSize: 13),
           textAlign: TextAlign.center,
         ),
         if (widget.locker.description != null) ...[
-          const SizedBox(height: 16),
+          const SizedBox(height: 8),
           Text(
             widget.locker.description!,
-            style: AppTextStyles.body(isDark),
+            style: AppTextStyles.body(isDark).copyWith(fontSize: 12),
             textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
         // Disponibilità
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
             color: AppColors.surface(isDark),
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(10),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -503,224 +524,774 @@ class _LockerDetailPageState extends State<LockerDetailPage> {
     return Row(
       children: [
         Container(
-          padding: const EdgeInsets.all(8),
+          padding: const EdgeInsets.all(6),
           decoration: BoxDecoration(
             color: AppColors.iconBackground(isDark),
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(6),
           ),
           child: Icon(
             icon,
-            size: 20,
+            size: 16,
             color: AppColors.primary(isDark),
           ),
         ),
-        const SizedBox(width: 12),
+        const SizedBox(width: 8),
         Text(
           title,
-          style: AppTextStyles.title(isDark),
+          style: AppTextStyles.title(isDark).copyWith(fontSize: 16),
         ),
       ],
     );
   }
 
-  Widget _buildBorrowCellCard({
+  /// Costruisce un quadrato cliccabile con il simbolo dell'oggetto
+  Widget _buildBorrowCellSquare({
     required bool isDark,
     required LockerCell cell,
   }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface(isDark),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: AppColors.borderColor(isDark).withOpacity(0.1),
-          width: 1,
+    final screenWidth = MediaQuery.of(context).size.width;
+    final squareSize = (screenWidth - 48 - 24) / 3; // 3 colonne con spaziatura
+    
+    return GestureDetector(
+      onTap: () => _showBorrowCellDetail(cell, isDark),
+      child: Container(
+        width: squareSize,
+        height: squareSize,
+        decoration: BoxDecoration(
+          color: AppColors.card(isDark),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: AppColors.primary(isDark).withOpacity(0.15),
+            width: 1.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.shadowColor(isDark).withOpacity(0.05),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Numero cella
-                Text(
-                  cell.cellNumber,
-                  style: AppTextStyles.body(isDark).copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                if (cell.itemName != null) ...[
-                  const SizedBox(height: 12),
-                  Text(
-                    cell.itemName!,
-                    style: AppTextStyles.title(isDark).copyWith(fontSize: 18),
-                  ),
-                ],
-                if (cell.itemDescription != null) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    cell.itemDescription!,
-                    style: AppTextStyles.bodySecondary(isDark),
-                  ),
-                ],
-                if (cell.borrowDuration != null) ...[
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Icon(
-                        CupertinoIcons.clock,
-                        size: 14,
-                        color: AppColors.textSecondary(isDark),
+        child: Stack(
+          children: [
+            // Contenuto principale - centrato
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 24),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Icona dell'oggetto con sfondo
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary(isDark).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Prestito: ${cell.borrowDuration!.inDays} giorni',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: AppColors.textSecondary(isDark),
+                      child: Icon(
+                        getIconForItem(cell.itemName),
+                        size: squareSize * 0.35, // 35% della dimensione del quadrato
+                        color: AppColors.primary(isDark),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    // Nome oggetto
+                    if (cell.itemName != null)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: Text(
+                          cell.itemName!,
+                          style: AppTextStyles.body(isDark).copyWith(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            height: 1.2,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
                         ),
                       ),
-                    ],
-                  ),
-                ],
-              ],
+                  ],
+                ),
+              ),
             ),
-          ),
-          // Pulsante apri
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            child: SizedBox(
-              width: double.infinity,
-              child: CupertinoButton.filled(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                borderRadius: BorderRadius.circular(10),
-                onPressed: () => _handleBorrowCell(cell),
-                child: const Text(
-                  'Apri',
-                  style: TextStyle(
-                    color: CupertinoColors.white,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
+            // Numero cella in sovraimpressione - angolo in alto a destra
+            Positioned(
+              top: 6,
+              right: 6,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppColors.surface(isDark),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                    color: AppColors.borderColor(isDark).withOpacity(0.3),
+                    width: 1,
+                  ),
+                ),
+                child: Text(
+                  cell.cellNumber.replaceAll('Cella ', ''),
+                  style: AppTextStyles.body(isDark).copyWith(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Mostra il bottom sheet con i dettagli della cella
+  void _showBorrowCellDetail(LockerCell cell, bool isDark) {
+    showCupertinoModalPopup(
+      context: context,
+      builder: (context) => Container(
+        decoration: BoxDecoration(
+          color: AppColors.card(isDark),
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(20),
+            topRight: Radius.circular(20),
+          ),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Handle bar
+              Container(
+                margin: const EdgeInsets.only(top: 12),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.textSecondary(isDark).withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              // Contenuto
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Header con icona e numero cella
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                AppColors.primary(isDark).withOpacity(0.2),
+                                AppColors.primary(isDark).withOpacity(0.1),
+                              ],
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(
+                            getIconForItem(cell.itemName),
+                            size: 32,
+                            color: AppColors.primary(isDark),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                cell.cellNumber,
+                                style: AppTextStyles.body(isDark).copyWith(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              if (cell.itemName != null) ...[
+                                const SizedBox(height: 4),
+                                Text(
+                                  cell.itemName!,
+                                  style: AppTextStyles.title(isDark).copyWith(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    // Foto dell'oggetto
+                    if (cell.itemImageUrl != null && cell.itemImageUrl!.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      GestureDetector(
+                        onTap: () => _showItemPhoto(cell, isDark),
+                        child: Container(
+                          width: double.infinity,
+                          height: 200,
+                          decoration: BoxDecoration(
+                            color: AppColors.iconBackground(isDark),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: Image.network(
+                              cell.itemImageUrl!,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                return _buildPhotoPlaceholder(isDark);
+                              },
+                              loadingBuilder: (context, child, loadingProgress) {
+                                if (loadingProgress == null) return child;
+                                return Center(
+                                  child: CupertinoActivityIndicator(
+                                    color: AppColors.primary(isDark),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                      ),
+                    ] else ...[
+                      const SizedBox(height: 16),
+                      _buildPhotoPlaceholder(isDark),
+                    ],
+                    // Descrizione
+                    if (cell.itemDescription != null) ...[
+                      const SizedBox(height: 16),
+                      Text(
+                        cell.itemDescription!,
+                        style: AppTextStyles.body(isDark),
+                      ),
+                    ],
+                    // Durata prestito
+                    if (cell.borrowDuration != null) ...[
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Icon(
+                            CupertinoIcons.clock_fill,
+                            size: 16,
+                            color: AppColors.primary(isDark),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Prestito: ${cell.borrowDuration!.inDays} giorni',
+                            style: AppTextStyles.body(isDark).copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                    const SizedBox(height: 24),
+                    // Pulsante apri
+                    SizedBox(
+                      width: double.infinity,
+                      child: CupertinoButton.filled(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        borderRadius: BorderRadius.circular(12),
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          _handleBorrowCell(cell);
+                        },
+                        child: const Text(
+                          'Apri cella',
+                          style: TextStyle(
+                            color: CupertinoColors.white,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Widget placeholder per foto non disponibile
+  Widget _buildPhotoPlaceholder(bool isDark) {
+    return Container(
+      width: double.infinity,
+      height: 200,
+      decoration: BoxDecoration(
+        color: AppColors.iconBackground(isDark),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            CupertinoIcons.photo,
+            size: 48,
+            color: AppColors.textSecondary(isDark),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Foto non disponibile',
+            style: AppTextStyles.bodySecondary(isDark),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildDepositGroupCard({
+  /// Mostra la foto dell'oggetto in un dialog
+  void _showItemPhoto(LockerCell cell, bool isDark) {
+    showCupertinoDialog(
+      context: context,
+      builder: (context) => CupertinoAlertDialog(
+        title: Text(
+          cell.itemName ?? 'Foto oggetto',
+          style: AppTextStyles.title(isDark),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 16),
+            if (cell.itemImageUrl != null && cell.itemImageUrl!.isNotEmpty)
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.network(
+                  cell.itemImageUrl!,
+                  width: 300,
+                  height: 300,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      width: 300,
+                      height: 300,
+                      decoration: BoxDecoration(
+                        color: AppColors.iconBackground(isDark),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            CupertinoIcons.photo,
+                            size: 64,
+                            color: AppColors.textSecondary(isDark),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            'Immagine non disponibile',
+                            style: AppTextStyles.bodySecondary(isDark),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                  loadingBuilder: (context, child, loadingProgress) {
+                    if (loadingProgress == null) return child;
+                    return Container(
+                      width: 300,
+                      height: 300,
+                      decoration: BoxDecoration(
+                        color: AppColors.iconBackground(isDark),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Center(
+                        child: CupertinoActivityIndicator(
+                          color: AppColors.primary(isDark),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              )
+            else
+              Container(
+                width: 300,
+                height: 300,
+                decoration: BoxDecoration(
+                  color: AppColors.iconBackground(isDark),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      CupertinoIcons.photo,
+                      size: 64,
+                      color: AppColors.textSecondary(isDark),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Foto non disponibile',
+                      style: AppTextStyles.bodySecondary(isDark),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Chiudi'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Costruisce un quadrato cliccabile per un gruppo di celle di deposito della stessa dimensione
+  Widget _buildDepositGroupSquare({
     required bool isDark,
     required CellSize size,
     required List<LockerCell> cells,
   }) {
-    // Prendi la prima cella come riferimento per prezzo (tutte le celle della stessa dimensione hanno lo stesso prezzo)
+    final screenWidth = MediaQuery.of(context).size.width;
+    final squareSize = (screenWidth - 48 - 24) / 3; // 3 colonne con spaziatura
     final referenceCell = cells.first;
-    final availableCount = cells.length;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface(isDark),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: AppColors.borderColor(isDark).withOpacity(0.1),
-          width: 1,
+    final availableCount = cells.where((c) => c.isAvailable).length;
+    
+    // Icona in base alla dimensione
+    IconData sizeIcon;
+    switch (size) {
+      case CellSize.small:
+        sizeIcon = CupertinoIcons.square;
+        break;
+      case CellSize.medium:
+        sizeIcon = CupertinoIcons.square_grid_2x2;
+        break;
+      case CellSize.large:
+        sizeIcon = CupertinoIcons.square_stack_3d_up_fill;
+        break;
+      case CellSize.extraLarge:
+        sizeIcon = CupertinoIcons.square_stack_3d_up_fill;
+        break;
+    }
+    
+    return GestureDetector(
+      onTap: () => _showDepositGroupDetail(size, cells, isDark),
+      child: Container(
+        width: squareSize,
+        height: squareSize,
+        decoration: BoxDecoration(
+          color: AppColors.card(isDark),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: AppColors.primary(isDark).withOpacity(0.15),
+            width: 1.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.shadowColor(isDark).withOpacity(0.05),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Dimensione
-                Row(
+        child: Stack(
+          children: [
+            // Contenuto principale - centrato
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 24),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(
-                      CupertinoIcons.square_grid_2x2,
-                      size: 20,
-                      color: AppColors.primary(isDark),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      size.label,
-                      style: AppTextStyles.title(isDark).copyWith(fontSize: 18),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  size.dimensions,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: AppColors.textSecondary(isDark),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                // Disponibilità
-                Row(
-                  children: [
-                    Icon(
-                      CupertinoIcons.lock,
-                      size: 16,
-                      color: AppColors.textSecondary(isDark),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      '$availableCount ${availableCount == 1 ? 'cella disponibile' : 'celle disponibili'}',
-                      style: AppTextStyles.body(isDark),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                // Costo
-                Row(
-                  children: [
-                    Icon(
-                      CupertinoIcons.money_dollar_circle,
-                      size: 16,
-                      color: AppColors.textSecondary(isDark),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      '€${referenceCell.pricePerDay.toStringAsFixed(2)}/giorno o €${referenceCell.pricePerHour.toStringAsFixed(2)}/ora',
-                      style: AppTextStyles.body(isDark).copyWith(
-                        fontWeight: FontWeight.w600,
+                    // Icona della dimensione con sfondo
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary(isDark).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        sizeIcon,
+                        size: squareSize * 0.35, // 35% della dimensione del quadrato
                         color: AppColors.primary(isDark),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    // Nome dimensione
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: Text(
+                        size.label,
+                        style: AppTextStyles.body(isDark).copyWith(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          height: 1.2,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
                       ),
                     ),
                   ],
                 ),
-              ],
+              ),
             ),
-          ),
-          // Pulsante affitta
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            child: SizedBox(
-              width: double.infinity,
-              child: CupertinoButton.filled(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                borderRadius: BorderRadius.circular(10),
-                onPressed: () => _handleDepositCell(referenceCell),
-                child: const Text(
-                  'Affitta',
-                  style: TextStyle(
-                    color: CupertinoColors.white,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
+            // Numero celle disponibili in sovraimpressione - angolo in alto a destra
+            Positioned(
+              top: 6,
+              right: 6,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                decoration: BoxDecoration(
+                  color: availableCount > 0 
+                      ? CupertinoColors.systemGreen.withOpacity(0.2)
+                      : AppColors.surface(isDark),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                    color: availableCount > 0
+                        ? CupertinoColors.systemGreen.withOpacity(0.5)
+                        : AppColors.borderColor(isDark).withOpacity(0.3),
+                    width: 1,
+                  ),
+                ),
+                child: Text(
+                  '$availableCount',
+                  style: AppTextStyles.body(isDark).copyWith(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                    color: availableCount > 0
+                        ? CupertinoColors.systemGreen
+                        : AppColors.textSecondary(isDark),
                   ),
                 ),
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Mostra il bottom sheet con i dettagli di un gruppo di celle di deposito
+  void _showDepositGroupDetail(CellSize size, List<LockerCell> cells, bool isDark) {
+    final referenceCell = cells.first;
+    final availableCount = cells.where((c) => c.isAvailable).length;
+    final totalCount = cells.length;
+    // Icona in base alla dimensione
+    IconData sizeIcon;
+    switch (size) {
+      case CellSize.small:
+        sizeIcon = CupertinoIcons.square;
+        break;
+      case CellSize.medium:
+        sizeIcon = CupertinoIcons.square_grid_2x2;
+        break;
+      case CellSize.large:
+        sizeIcon = CupertinoIcons.square_stack_3d_up_fill;
+        break;
+      case CellSize.extraLarge:
+        sizeIcon = CupertinoIcons.square_stack_3d_up_fill;
+        break;
+    }
+    
+    showCupertinoModalPopup(
+      context: context,
+      builder: (context) => Container(
+        decoration: BoxDecoration(
+          color: AppColors.card(isDark),
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(20),
+            topRight: Radius.circular(20),
           ),
-        ],
+        ),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Handle bar
+              Container(
+                margin: const EdgeInsets.only(top: 12),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.textSecondary(isDark).withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              // Contenuto
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Header con icona e numero cella
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: AppColors.iconBackground(isDark),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(
+                            sizeIcon,
+                            size: 32,
+                            color: AppColors.primary(isDark),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                size.label,
+                                style: AppTextStyles.title(isDark).copyWith(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                '$availableCount di $totalCount celle disponibili',
+                                style: AppTextStyles.body(isDark).copyWith(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    // Dettagli dimensione
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: AppColors.iconBackground(isDark),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                CupertinoIcons.arrow_left_right,
+                                size: 16,
+                                color: AppColors.textSecondary(isDark),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                size.dimensions,
+                                style: AppTextStyles.body(isDark),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Disponibilità
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Icon(
+                          CupertinoIcons.lock_fill,
+                          size: 16,
+                          color: availableCount > 0 
+                              ? CupertinoColors.systemGreen 
+                              : CupertinoColors.systemRed,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          availableCount > 0 
+                              ? '$availableCount ${availableCount == 1 ? 'cella disponibile' : 'celle disponibili'}'
+                              : 'Nessuna cella disponibile',
+                          style: AppTextStyles.body(isDark).copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: availableCount > 0 
+                                ? CupertinoColors.systemGreen 
+                                : CupertinoColors.systemRed,
+                          ),
+                        ),
+                      ],
+                    ),
+                    // Prezzo
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary(isDark).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            CupertinoIcons.money_dollar_circle_fill,
+                            size: 20,
+                            color: AppColors.primary(isDark),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '€${referenceCell.pricePerDay.toStringAsFixed(2)}/giorno',
+                                  style: AppTextStyles.title(isDark).copyWith(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.primary(isDark),
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'o €${referenceCell.pricePerHour.toStringAsFixed(2)}/ora',
+                                  style: AppTextStyles.bodySecondary(isDark).copyWith(
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    // Pulsante affitta
+                    SizedBox(
+                      width: double.infinity,
+                      child: CupertinoButton.filled(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        borderRadius: BorderRadius.circular(12),
+                        onPressed: availableCount > 0 ? () {
+                          Navigator.of(context).pop();
+                          // Prendi la prima cella disponibile
+                          final availableCell = cells.firstWhere((c) => c.isAvailable);
+                          _handleDepositCell(availableCell);
+                        } : null,
+                        child: const Text(
+                          'Affitta cella',
+                          style: TextStyle(
+                            color: CupertinoColors.white,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

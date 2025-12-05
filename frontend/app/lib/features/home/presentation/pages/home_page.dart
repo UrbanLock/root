@@ -876,16 +876,11 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
                                         Text(
                                           _selectedLocker!.name,
                                           style: AppTextStyles.title(isDark),
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
                                         ),
-                                        const SizedBox(height: 2),
                                         Text(
                                           _selectedLocker!.type.label,
                                           style: AppTextStyles.bodySecondary(
                                               isDark),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
                                         ),
                                       ],
                                     ),
@@ -910,8 +905,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
                                 Text(
                                   _selectedLocker!.description!,
                                   style: AppTextStyles.bodySecondary(isDark),
-                                  maxLines: 3,
-                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ],
                               const SizedBox(height: 12),
@@ -1013,8 +1006,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
                                     color: AppColors.text(isDark),
                                     fontSize: 13,
                                   ),
-                                  maxLines: 3,
-                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
                             ],

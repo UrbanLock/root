@@ -307,8 +307,6 @@ class _NotificationsPageState extends State<NotificationsPage> {
                                   : FontWeight.w600,
                               color: AppColors.text(isDark),
                             ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                         if (!notification.isRead)
@@ -329,8 +327,6 @@ class _NotificationsPageState extends State<NotificationsPage> {
                         fontSize: 13,
                         color: AppColors.textSecondary(isDark),
                       ),
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 4),
                     Text(

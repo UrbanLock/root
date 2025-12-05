@@ -411,16 +411,12 @@ class _SettingsPageState extends State<SettingsPage> {
                       fontWeight: FontWeight.w500,
                       color: titleColor ?? AppColors.text(isDark),
                     ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
                   ),
                   if (subtitle != null) ...[
                     const SizedBox(height: 2),
                     Text(
                       subtitle,
                       style: AppTextStyles.bodySecondary(isDark),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ],

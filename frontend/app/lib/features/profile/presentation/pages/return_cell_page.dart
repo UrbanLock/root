@@ -252,13 +252,14 @@ class _ReturnCellPageState extends State<ReturnCellPage> {
     setState(() {
       _cellOpened = true;
       _waitingForDoorClose = true; // Vai direttamente alla schermata di attesa chiusura
-      _statusMessage = 'In attesa della chiusura dello sportello';
+      _statusMessage = 'Cella aperta';
     });
     
     // TODO BACKEND: Invia comando Bluetooth per aprire la cella
     // await sendOpenCellCommand(widget.cell.cellId);
     
-    // ⚠️ SOLO PER TESTING: Simula apertura (rimosso delay per evitare schermata intermedia)
+    // ⚠️ SOLO PER TESTING: Simula apertura
+    await Future.delayed(const Duration(milliseconds: 500));
     
     // Dopo 3 secondi, simula chiusura
     _doorCloseTimer = Timer(const Duration(seconds: 3), () {
@@ -272,6 +273,10 @@ class _ReturnCellPageState extends State<ReturnCellPage> {
     
     _doorCloseTimer?.cancel();
     _doorCloseTimer = null;
+    
+    setState(() {
+      _waitingForDoorClose = false;
+    });
 
     // TODO BACKEND: Notifica restituzione al backend
     // POST /api/v1/cells/return
@@ -285,8 +290,7 @@ class _ReturnCellPageState extends State<ReturnCellPage> {
       }
     }
 
-    // Naviga direttamente alla schermata di conferma senza cambiare lo stato
-    // per evitare schermate intermedie
+    // Naviga alla schermata di conferma
     if (mounted) {
       try {
         await Navigator.of(context).pushReplacement(
@@ -665,6 +669,45 @@ class _ReturnCellPageState extends State<ReturnCellPage> {
               ),
             ),
           ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCellOpenedScreen(bool isDark) {
+    return Column(
+      children: [
+        Container(
+          width: 120,
+          height: 120,
+          decoration: BoxDecoration(
+            color: AppColors.primary(isDark).withOpacity(0.1),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(
+            CupertinoIcons.lock_open,
+            size: 60,
+            color: AppColors.primary(isDark),
+          ),
+        ),
+        const SizedBox(height: 32),
+        Text(
+          'Metti l\'oggetto nella cella',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+            color: AppColors.text(isDark),
+          ),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 16),
+        Text(
+          'Metti l\'oggetto dentro la cella',
+          style: TextStyle(
+            fontSize: 15,
+            color: AppColors.textSecondary(isDark),
+          ),
+          textAlign: TextAlign.center,
         ),
       ],
     );
