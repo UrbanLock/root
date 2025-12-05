@@ -88,6 +88,13 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
     _requestLocationPermissionAndZoom();
     _loadUnreadNotificationsCount();
   }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Ricarica il contatore quando la pagina diventa visibile
+    _loadUnreadNotificationsCount();
+  }
   
   @override
   void dispose() {
@@ -316,7 +323,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
   Widget _getCurrentPage() {
     switch (_currentIndex) {
       case 0:
-        return NotificationsPage(themeManager: widget.themeManager);
+        return NotificationsPage(
+          themeManager: widget.themeManager,
+          onNotificationsUpdated: _loadUnreadNotificationsCount,
+        );
       case 1:
         return _buildMapView();
       case 2:

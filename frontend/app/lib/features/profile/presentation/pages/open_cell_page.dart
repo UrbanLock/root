@@ -277,27 +277,6 @@ class _OpenCellPageState extends State<OpenCellPage> {
       _statusMessage = 'Cella aperta. Prendi l\'oggetto e chiudi lo sportello.';
     });
 
-    // Notifica apertura (gestita in modo sicuro per non bloccare il flusso)
-    try {
-      await NotificationService().notifyOpenCellInBackground(
-        ActiveCell(
-          id: DateTime.now().millisecondsSinceEpoch.toString(),
-          lockerId: widget.lockerId,
-          lockerName: widget.lockerName,
-          lockerType: 'Prestito',
-          cellNumber: widget.cell.cellNumber,
-          cellId: widget.cell.id,
-          startTime: DateTime.now(),
-          endTime: widget.cell.borrowDuration != null
-              ? DateTime.now().add(widget.cell.borrowDuration!)
-              : DateTime.now().add(const Duration(days: 7)),
-          type: CellUsageType.borrowed,
-        ),
-      );
-    } catch (e) {
-      debugPrint('⚠️ [NOTIFICATION] Errore nella notifica (non bloccante): $e');
-      // Continua comunque con il timer anche se la notifica fallisce
-    }
 
     // ⚠️ SOLO PER TESTING: Timer di 3 secondi per simulare chiusura
     // IN PRODUZIONE: Rilevare chiusura tramite sensore Bluetooth/backend che invierà segnale
@@ -363,12 +342,12 @@ class _OpenCellPageState extends State<OpenCellPage> {
       repository.addActiveCell(activeCell);
     }
     
-    debugPrint('📱 [CLOSE] Notifico chiusura...');
-    // Notifica chiusura
+    debugPrint('📱 [CLOSE] Programmo promemoria per restituzione...');
+    // Programma promemoria per restituire l'oggetto
     try {
-      await NotificationService().notifyCellClosed(activeCell);
+      await NotificationService().scheduleBorrowReturnReminder(activeCell);
     } catch (e) {
-      debugPrint('⚠️ [NOTIFICATION] Errore nella notifica: $e');
+      debugPrint('⚠️ [NOTIFICATION] Errore nella programmazione promemoria: $e');
     }
 
     debugPrint('📱 [CLOSE] Navigo alla schermata di conferma...');

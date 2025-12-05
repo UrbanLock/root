@@ -274,24 +274,6 @@ class _DepositOpenCellPageState extends State<DepositOpenCellPage> {
       _statusMessage = 'Cella aperta. Metti i tuoi oggetti dentro e chiudi lo sportello.';
     });
 
-    // Notifica apertura (gestita in modo sicuro)
-    try {
-      await NotificationService().notifyOpenCellInBackground(
-        ActiveCell(
-          id: DateTime.now().millisecondsSinceEpoch.toString(),
-          lockerId: widget.lockerId,
-          lockerName: widget.lockerName,
-          lockerType: 'Deposito',
-          cellNumber: widget.cell.cellNumber,
-          cellId: widget.cell.id,
-          startTime: DateTime.now(),
-          endTime: DateTime.now().add(widget.duration), // Durata selezionata dall'utente
-          type: CellUsageType.deposited,
-        ),
-      );
-    } catch (e) {
-      debugPrint('⚠️ [NOTIFICATION] Errore nella notifica (non bloccante): $e');
-    }
 
     // ⚠️ SOLO PER TESTING: Timer di 3 secondi per simulare chiusura
     // IN PRODUZIONE: Rilevare chiusura tramite sensore Bluetooth/backend che invierà segnale
@@ -375,11 +357,12 @@ class _DepositOpenCellPageState extends State<DepositOpenCellPage> {
         repository.addActiveCell(activeCell);
       }
       
-      debugPrint('📱 [CLOSE] Notifico chiusura...');
+      debugPrint('📱 [CLOSE] Programmo promemoria per ritiro deposito...');
+      // Programma promemoria per ritirare il deposito
       try {
-        await NotificationService().notifyCellClosed(activeCell);
+        await NotificationService().scheduleDepositPickupReminder(activeCell);
       } catch (e) {
-        debugPrint('⚠️ [NOTIFICATION] Errore nella notifica: $e');
+        debugPrint('⚠️ [NOTIFICATION] Errore nella programmazione promemoria: $e');
       }
     }
 

@@ -142,29 +142,71 @@ class NotificationService {
     );
   }
 
-  /// Notifica quando una cella è aperta e l'app va in background
+  /// Programma promemoria per restituire un oggetto preso in prestito
   /// 
-  /// **Caso d'uso**: L'utente ha aperto una cella ma chiude l'app prima di chiudere lo sportello
-  Future<void> notifyOpenCellInBackground(ActiveCell cell) async {
-    // Genera un ID valido (32-bit integer) usando hash della stringa
-    // Questo evita errori quando cell.id è troppo grande (es. timestamp)
-    final cellIdHash = cell.id.hashCode.abs() % 1000000; // Limita a 6 cifre
+  /// **Caso d'uso**: Avvisa l'utente 1 giorno prima della scadenza che deve restituire l'oggetto
+  Future<void> scheduleBorrowReturnReminder(ActiveCell cell) async {
+    if (cell.endTime == null || cell.type != CellUsageType.borrowed) return;
     
-    await showNotification(
-      id: 1000 + cellIdHash, // ID univoco per ogni cella (valido per 32-bit)
-      title: 'Cella aperta',
-      body: 'Ricorda di chiudere lo sportello della ${cell.cellNumber} al locker ${cell.lockerName}',
-      payload: 'open_cell_${cell.id}',
-    );
+    final cellIdHash = cell.id.hashCode.abs() % 1000000;
+    final reminderDate = cell.endTime!.subtract(const Duration(days: 1));
+    
+    // Programma solo se la scadenza è almeno 1 giorno nel futuro
+    if (reminderDate.isAfter(DateTime.now())) {
+      final notificationId = 'borrow_reminder_${cell.id}';
+      
+      await scheduleNotification(
+        id: 1000 + cellIdHash,
+        title: 'Promemoria: Restituisci oggetto',
+        body: 'Ricorda di restituire l\'oggetto nella ${cell.cellNumber} al locker ${cell.lockerName} entro domani',
+        scheduledDate: reminderDate,
+        payload: notificationId,
+      );
 
-    // Programma un promemoria dopo 5 minuti se la cella è ancora aperta
-    await scheduleNotification(
-      id: 2000 + cellIdHash,
-      title: 'Promemoria: Cella aperta',
-      body: 'La ${cell.cellNumber} al locker ${cell.lockerName} è ancora aperta. Ricorda di chiudere lo sportello.',
-      scheduledDate: DateTime.now().add(const Duration(minutes: 5)),
-      payload: 'reminder_cell_${cell.id}',
-    );
+      await _addAppNotification(
+        id: notificationId,
+        title: 'Promemoria programmato',
+        body: 'Ti ricorderemo di restituire l\'oggetto nella ${cell.cellNumber} al locker ${cell.lockerName} il ${_formatDate(reminderDate)}',
+        type: NotificationType.info,
+        payload: notificationId,
+      );
+    }
+  }
+
+  /// Programma promemoria per ritirare un deposito
+  /// 
+  /// **Caso d'uso**: Avvisa l'utente 1 giorno prima della scadenza che deve ritirare il deposito
+  Future<void> scheduleDepositPickupReminder(ActiveCell cell) async {
+    if (cell.endTime == null || cell.type != CellUsageType.deposited) return;
+    
+    final cellIdHash = cell.id.hashCode.abs() % 1000000;
+    final reminderDate = cell.endTime!.subtract(const Duration(days: 1));
+    
+    // Programma solo se la scadenza è almeno 1 giorno nel futuro
+    if (reminderDate.isAfter(DateTime.now())) {
+      final notificationId = 'deposit_reminder_${cell.id}';
+      
+      await scheduleNotification(
+        id: 2000 + cellIdHash,
+        title: 'Promemoria: Ritira deposito',
+        body: 'Ricorda di ritirare il tuo deposito dalla ${cell.cellNumber} al locker ${cell.lockerName} entro domani',
+        scheduledDate: reminderDate,
+        payload: notificationId,
+      );
+
+      await _addAppNotification(
+        id: notificationId,
+        title: 'Promemoria programmato',
+        body: 'Ti ricorderemo di ritirare il deposito dalla ${cell.cellNumber} al locker ${cell.lockerName} il ${_formatDate(reminderDate)}',
+        type: NotificationType.info,
+        payload: notificationId,
+      );
+    }
+  }
+
+  /// Formatta una data per la visualizzazione
+  String _formatDate(DateTime date) {
+    return '${date.day}/${date.month}/${date.year}';
   }
 
   /// Notifica quando una cella sta per scadere
@@ -200,21 +242,186 @@ class NotificationService {
     );
   }
 
-  /// Notifica quando lo sportello è stato chiuso con successo
-  /// 
-  /// **Caso d'uso**: Conferma all'utente che l'operazione è completata
-  Future<void> notifyCellClosed(ActiveCell cell) async {
-    final cellIdHash = cell.id.hashCode.abs() % 1000000;
+
+  /// Aggiunge una notifica all'app (nella sezione notifiche)
+  Future<void> _addAppNotification({
+    required String id,
+    required String title,
+    required String body,
+    required NotificationType type,
+    String? payload,
+  }) async {
+    final notification = AppNotification(
+      id: id,
+      title: title,
+      body: body,
+      timestamp: DateTime.now(),
+      type: type,
+      payload: payload,
+    );
+    await _notificationRepository.addNotification(notification);
+  }
+
+
+  /// Notifica quando lo stato di una donazione cambia
+  Future<void> notifyDonationStatusChanged({
+    required String donationId,
+    required String itemName,
+    required String status,
+    String? rejectionReason,
+  }) async {
+    final notificationId = 'donation_${donationId}_${status}';
+    final notificationIdHash = notificationId.hashCode.abs() % 1000000;
+    
+    String title;
+    String body;
+    NotificationType type;
+
+    switch (status) {
+      case 'confermata':
+        title = 'Donazione confermata';
+        body = 'La tua donazione "$itemName" è stata confermata. Puoi consegnarla al Comune di Trento.';
+        type = NotificationType.success;
+        break;
+      case 'rifiutata':
+        title = 'Donazione rifiutata';
+        body = rejectionReason != null && rejectionReason.isNotEmpty
+            ? 'La tua donazione "$itemName" è stata rifiutata: $rejectionReason'
+            : 'La tua donazione "$itemName" è stata rifiutata.';
+        type = NotificationType.error;
+        break;
+      case 'consegnata':
+        title = 'Donazione consegnata';
+        body = 'Grazie! La tua donazione "$itemName" è stata consegnata con successo.';
+        type = NotificationType.success;
+        break;
+      default:
+        title = 'Stato donazione aggiornato';
+        body = 'Lo stato della tua donazione "$itemName" è stato aggiornato.';
+        type = NotificationType.info;
+    }
+
     await showNotification(
-      id: 5000 + cellIdHash,
-      title: 'Cella chiusa',
-      body: 'La ${cell.cellNumber} al locker ${cell.lockerName} è stata chiusa con successo',
-      payload: 'closed_cell_${cell.id}',
+      id: 7000 + notificationIdHash,
+      title: title,
+      body: body,
+      payload: notificationId,
     );
 
-    // Cancella i promemoria programmati per questa cella
-    await cancelNotification(1000 + cellIdHash);
-    await cancelNotification(2000 + cellIdHash);
+    await _addAppNotification(
+      id: notificationId,
+      title: title,
+      body: body,
+      type: type,
+      payload: notificationId,
+    );
+  }
+
+  /// Notifica quando un oggetto viene restituito
+  Future<void> notifyItemReturned({
+    required String cellNumber,
+    required String lockerName,
+    required String itemName,
+  }) async {
+    final notificationId = 'return_${DateTime.now().millisecondsSinceEpoch}';
+    final notificationIdHash = notificationId.hashCode.abs() % 1000000;
+    
+    await showNotification(
+      id: 8000 + notificationIdHash,
+      title: 'Oggetto restituito',
+      body: 'Hai restituito "$itemName" nella ${cellNumber} al locker ${lockerName}',
+      payload: notificationId,
+    );
+
+    await _addAppNotification(
+      id: notificationId,
+      title: 'Oggetto restituito',
+      body: 'Hai restituito "$itemName" nella ${cellNumber} al locker ${lockerName}',
+      type: NotificationType.success,
+      payload: notificationId,
+    );
+  }
+
+  /// Notifica quando un prestito sta per scadere
+  Future<void> notifyBorrowExpiringSoon({
+    required String cellNumber,
+    required String lockerName,
+    required String itemName,
+    required int daysRemaining,
+  }) async {
+    final notificationId = 'borrow_expiring_${DateTime.now().millisecondsSinceEpoch}';
+    final notificationIdHash = notificationId.hashCode.abs() % 1000000;
+    
+    final title = 'Prestito in scadenza';
+    final body = daysRemaining == 1
+        ? 'Il prestito di "$itemName" scade domani. Ricorda di restituirlo nella ${cellNumber} al locker ${lockerName}'
+        : 'Il prestito di "$itemName" scade tra $daysRemaining giorni. Ricorda di restituirlo nella ${cellNumber} al locker ${lockerName}';
+
+    await showNotification(
+      id: 9000 + notificationIdHash,
+      title: title,
+      body: body,
+      payload: notificationId,
+    );
+
+    await _addAppNotification(
+      id: notificationId,
+      title: title,
+      body: body,
+      type: NotificationType.warning,
+      payload: notificationId,
+    );
+  }
+
+  /// Notifica quando un prestito è scaduto
+  Future<void> notifyBorrowExpired({
+    required String cellNumber,
+    required String lockerName,
+    required String itemName,
+  }) async {
+    final notificationId = 'borrow_expired_${DateTime.now().millisecondsSinceEpoch}';
+    final notificationIdHash = notificationId.hashCode.abs() % 1000000;
+    
+    await showNotification(
+      id: 10000 + notificationIdHash,
+      title: 'Prestito scaduto',
+      body: 'Il prestito di "$itemName" è scaduto. Restituisci l\'oggetto nella ${cellNumber} al locker ${lockerName}',
+      payload: notificationId,
+    );
+
+    await _addAppNotification(
+      id: notificationId,
+      title: 'Prestito scaduto',
+      body: 'Il prestito di "$itemName" è scaduto. Restituisci l\'oggetto nella ${cellNumber} al locker ${lockerName}',
+      type: NotificationType.error,
+      payload: notificationId,
+    );
+  }
+
+  /// Notifica quando un ordine è pronto per il ritiro
+  Future<void> notifyOrderReady({
+    required String cellNumber,
+    required String lockerName,
+    required String orderNumber,
+    required String storeName,
+  }) async {
+    final notificationId = 'order_ready_${orderNumber}';
+    final notificationIdHash = notificationId.hashCode.abs() % 1000000;
+    
+    await showNotification(
+      id: 11000 + notificationIdHash,
+      title: 'Ordine pronto',
+      body: 'Il tuo ordine #$orderNumber da $storeName è pronto. Ritiralo dalla ${cellNumber} al locker ${lockerName}',
+      payload: notificationId,
+    );
+
+    await _addAppNotification(
+      id: notificationId,
+      title: 'Ordine pronto',
+      body: 'Il tuo ordine #$orderNumber da $storeName è pronto. Ritiralo dalla ${cellNumber} al locker ${lockerName}',
+      type: NotificationType.info,
+      payload: notificationId,
+    );
   }
 
   /// Notifica promemoria generico

@@ -7,6 +7,7 @@ import 'package:app/core/theme/theme_manager.dart';
 import 'package:app/core/styles/app_colors.dart';
 import 'package:app/core/styles/app_text_styles.dart';
 import 'package:app/core/di/app_dependencies.dart';
+import 'package:app/core/notifications/notification_service.dart';
 import 'package:app/features/cells/domain/models/active_cell.dart';
 import 'package:app/features/cells/data/repositories/cell_repository_mock.dart';
 import 'package:app/features/reports/presentation/pages/report_issue_page.dart';
@@ -288,6 +289,17 @@ class _ReturnCellPageState extends State<ReturnCellPage> {
       } catch (e) {
         debugPrint('⚠️ [RETURN] Errore notifica backend: $e');
       }
+    }
+
+    // Notifica restituzione oggetto
+    try {
+      await NotificationService().notifyItemReturned(
+        cellNumber: widget.cell.cellNumber,
+        lockerName: widget.cell.lockerName,
+        itemName: 'Oggetto preso in prestito', // ActiveCell non ha itemName, usiamo un valore di default
+      );
+    } catch (e) {
+      debugPrint('⚠️ [RETURN] Errore notifica restituzione: $e');
     }
 
     // Naviga alla schermata di conferma

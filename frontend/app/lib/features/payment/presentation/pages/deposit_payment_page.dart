@@ -7,6 +7,7 @@ import 'package:app/core/styles/app_colors.dart';
 import 'package:app/core/styles/app_text_styles.dart';
 import 'package:app/features/lockers/domain/models/locker_cell.dart';
 import 'package:app/features/payment/presentation/pages/deposit_open_cell_page.dart';
+import 'package:app/core/notifications/notification_service.dart';
 
 /// Pagina di pagamento per affittare una cella di deposito
 /// 
@@ -104,6 +105,7 @@ class _DepositPaymentPageState extends State<DepositPaymentPage> {
       _isVerifyingBluetooth = false;
       _bluetoothCheckComplete = false;
     });
+
 
     // Dopo il pagamento, verifica silenziosamente la connessione Bluetooth
     // Usa un piccolo delay per assicurarsi che lo stato sia aggiornato

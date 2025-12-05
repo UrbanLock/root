@@ -9,10 +9,12 @@ import 'package:app/features/notifications/data/repositories/notification_reposi
 
 class NotificationsPage extends StatefulWidget {
   final ThemeManager themeManager;
+  final VoidCallback? onNotificationsUpdated;
 
   const NotificationsPage({
     super.key,
     required this.themeManager,
+    this.onNotificationsUpdated,
   });
 
   @override
@@ -60,16 +62,19 @@ class _NotificationsPageState extends State<NotificationsPage> {
 
     await _notificationRepository.markAsRead(notification.id);
     await _loadNotifications();
+    widget.onNotificationsUpdated?.call();
   }
 
   Future<void> _markAllAsRead() async {
     await _notificationRepository.markAllAsRead();
     await _loadNotifications();
+    widget.onNotificationsUpdated?.call();
   }
 
   Future<void> _deleteNotification(AppNotification notification) async {
     await _notificationRepository.deleteNotification(notification.id);
     await _loadNotifications();
+    widget.onNotificationsUpdated?.call();
   }
 
   Future<void> _deleteAllNotifications() async {
@@ -95,6 +100,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
     if (shouldDelete == true) {
       await _notificationRepository.deleteAllNotifications();
       await _loadNotifications();
+      widget.onNotificationsUpdated?.call();
     }
   }
 

@@ -8,6 +8,11 @@ import 'package:app/features/notifications/data/repositories/notification_reposi
 /// - Sincronizzare con il server
 /// - Usare database locale per cache
 class NotificationRepositoryImpl implements NotificationRepository {
+  // Singleton pattern per condividere la stessa lista tra tutte le istanze
+  static final NotificationRepositoryImpl _instance = NotificationRepositoryImpl._internal();
+  factory NotificationRepositoryImpl() => _instance;
+  NotificationRepositoryImpl._internal();
+
   // Mock: lista notifiche in memoria
   // In produzione, questo verrà da un database locale o dal backend
   final List<AppNotification> _notifications = [];
