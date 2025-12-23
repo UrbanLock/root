@@ -35,7 +35,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Request logging middleware
 app.use((req, res, next) => {
-  logger.info(`${req.method} ${req.originalUrl}`, {
+  logger.info(`${req.method}${req.originalUrl}`, {
     ip: req.ip,
     userAgent: req.get('user-agent'),
   });
@@ -45,8 +45,19 @@ app.use((req, res, next) => {
 // Routes
 app.use('/', healthRoutes);
 app.use(`/api/${config.apiVersion}`, healthRoutes);
+
+// Monta route auth
 app.use(`/api/${config.apiVersion}/auth`, authRoutes);
 app.use(`/api/${config.apiVersion}/lockers`, lockerRoutes);
+
+// Log delle route registrate
+logger.info(`Route auth montate su: /api/${config.apiVersion}/auth`);
+logger.info(`Route disponibili:`);
+logger.info(`  POST /api/${config.apiVersion}/auth/operator/login`);
+logger.info(`  POST /api/${config.apiVersion}/auth/login`);
+logger.info(`  POST /api/${config.apiVersion}/auth/refresh`);
+logger.info(`  GET /api/${config.apiVersion}/auth/me`);
+logger.info(`  POST /api/${config.apiVersion}/auth/logout`);
 
 // 404 handler (must be after all routes)
 app.use(notFound);

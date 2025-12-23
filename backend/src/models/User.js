@@ -62,6 +62,17 @@ const userSchema = new mongoose.Schema(
       default: null,
       select: false, // Non includere di default nelle query
     },
+    // Campi per autenticazione operatori (username/password)
+    username: {
+      type: String,
+      sparse: true, // Permette null ma mantiene unique se presente
+      trim: true,
+      lowercase: true,
+    },
+    password: {
+      type: String,
+      select: false, // Non includere di default nelle query
+    },
     // RF1: Supporto account "figli" per minori collegati a genitore
     genitoreId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -79,6 +90,7 @@ const userSchema = new mongoose.Schema(
 // Index per ricerca rapida
 // utenteId e codiceFiscale hanno già index automatico da unique: true
 userSchema.index({ genitoreId: 1 }); // Index per ricerca account figli (RF1)
+userSchema.index({ username: 1 }, { unique: true, sparse: true }); // Index per username operatori
 
 // Metodo per rimuovere campi sensibili dalla serializzazione (GDPR RNF5)
 userSchema.methods.toJSON = function () {

@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:console/core/theme/app_colors.dart';
 import 'package:console/core/theme/theme_manager.dart';
+import 'package:console/core/api/operator_auth_service.dart';
 import 'package:console/home_page.dart';
 
 class LoginPage extends StatefulWidget {
@@ -18,6 +19,7 @@ class _LoginPageState extends State<LoginPage> {
   bool _obscurePassword = true;
   String? _usernameError;
   String? _passwordError;
+  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -54,33 +56,76 @@ class _LoginPageState extends State<LoginPage> {
     return isValid;
   }
 
-  void _handleSubmit() {
-    if (_validate()) {
-      final username = _usernameController.text;
+  Future<void> _handleSubmit() async {
+    if (!_validate()) {
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final username = _usernameController.text.trim();
       final password = _passwordController.text;
-      
-      // Qui puoi aggiungere la logica di autenticazione
-      showCupertinoDialog(
-        context: context,
-        builder: (context) => CupertinoAlertDialog(
-          title: const Text('Login effettuato'),
-          content: Text('Benvenuto, $username!'),
-          actions: [
-            CupertinoDialogAction(
-              child: const Text('OK'),
-              onPressed: () {
-                Navigator.of(context).pop();
-                // Naviga alla homepage dopo il login
-                Navigator.of(context).pushReplacement(
-                  CupertinoPageRoute(
-                    builder: (context) => HomePage(themeManager: widget.themeManager),
-                  ),
-                );
-              },
-            ),
-          ],
-        ),
+      final result = await OperatorAuthService.login(
+        username: username,
+        password: password,
       );
+
+      setState(() {
+        _isLoading = false;
+      });
+
+      if (result['success'] == true) {
+        final user = result['user'] as Map<String, dynamic>;
+        final nome = user['nome'] as String? ?? 'Operatore';
+        
+        if (mounted) {
+          // Naviga direttamente alla homepage dopo il login
+          Navigator.of(context).pushReplacement(
+            CupertinoPageRoute(
+              builder: (context) => HomePage(themeManager: widget.themeManager),
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+          showCupertinoDialog(
+            context: context,
+            builder: (context) => CupertinoAlertDialog(
+              title: const Text('Errore'),
+              content: Text(result['error'] as String? ?? 'Errore durante il login'),
+              actions: [
+                CupertinoDialogAction(
+                  child: const Text('OK'),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+      
+      if (mounted) {
+        showCupertinoDialog(
+          context: context,
+          builder: (context) => CupertinoAlertDialog(
+            title: const Text('Errore'),
+            content: Text('Errore di connessione: ${e.toString()}'),
+            actions: [
+              CupertinoDialogAction(
+                child: const Text('OK'),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ],
+          ),
+        );
+      }
     }
   }
 
@@ -247,15 +292,17 @@ class _LoginPageState extends State<LoginPage> {
                   color: AppColors.primary,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   borderRadius: BorderRadius.circular(8),
-                  onPressed: _handleSubmit,
-                  child: const Text(
-                    'Accedi',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.white,
-                    ),
-                  ),
+                  onPressed: _isLoading ? null : _handleSubmit,
+                  child: _isLoading
+                      ? const CupertinoActivityIndicator(color: AppColors.white)
+                      : const Text(
+                          'Accedi',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.white,
+                          ),
+                        ),
                 ),
               ],
             ),

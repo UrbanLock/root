@@ -8,7 +8,7 @@ import 'package:console/features/lockers/domain/models/locker_type.dart';
 import 'package:console/features/lockers/domain/models/locker.dart';
 import 'package:console/features/lockers/domain/models/locker_cell.dart';
 import 'package:console/features/lockers/domain/repositories/locker_repository.dart';
-import 'package:console/features/lockers/data/repositories/locker_repository_mock.dart';
+import 'package:console/features/lockers/data/repositories/locker_repository_api.dart';
 import 'package:console/donation_detail_page.dart';
 
 class DonationsPage extends StatefulWidget {
@@ -22,7 +22,7 @@ class DonationsPage extends StatefulWidget {
 
 class _DonationsPageState extends State<DonationsPage> {
   final TextEditingController _searchController = TextEditingController();
-  final LockerRepository _lockerRepository = LockerRepositoryMock();
+  final LockerRepository _lockerRepository = LockerRepositoryApi();
   
   List<Donation> _allDonations = [];
   List<Donation> _filteredDonations = [];

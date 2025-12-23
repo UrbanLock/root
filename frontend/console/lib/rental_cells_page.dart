@@ -6,7 +6,7 @@ import 'package:console/features/lockers/domain/models/locker_cell.dart';
 import 'package:console/features/lockers/domain/models/cell_type.dart';
 import 'package:console/features/lockers/domain/models/locker_type.dart';
 import 'package:console/features/lockers/domain/repositories/locker_repository.dart';
-import 'package:console/features/lockers/data/repositories/locker_repository_mock.dart';
+import 'package:console/features/lockers/data/repositories/locker_repository_api.dart';
 
 class RentalCellsPage extends StatefulWidget {
   final ThemeManager themeManager;
@@ -18,7 +18,7 @@ class RentalCellsPage extends StatefulWidget {
 }
 
 class _RentalCellsPageState extends State<RentalCellsPage> {
-  final LockerRepository _lockerRepository = LockerRepositoryMock();
+  final LockerRepository _lockerRepository = LockerRepositoryApi();
   final TextEditingController _searchController = TextEditingController();
   
   List<Locker> _allLockers = [];

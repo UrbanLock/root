@@ -8,7 +8,7 @@ import 'package:console/features/lockers/domain/models/locker_type.dart';
 import 'package:console/features/lockers/domain/models/locker.dart';
 import 'package:console/features/lockers/domain/models/locker_cell.dart';
 import 'package:console/features/lockers/domain/repositories/locker_repository.dart';
-import 'package:console/features/lockers/data/repositories/locker_repository_mock.dart';
+import 'package:console/features/lockers/data/repositories/locker_repository_api.dart';
 
 class DonationDetailPage extends StatefulWidget {
   final Donation donation;
@@ -26,7 +26,7 @@ class DonationDetailPage extends StatefulWidget {
 
 class _DonationDetailPageState extends State<DonationDetailPage> {
   late Donation _currentDonation;
-  final LockerRepository _lockerRepository = LockerRepositoryMock();
+  final LockerRepository _lockerRepository = LockerRepositoryApi();
 
   @override
   void initState() {

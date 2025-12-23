@@ -1,8 +1,11 @@
 import express from 'express';
 import { body, validationResult } from 'express-validator';
 import { login, refreshToken, getMe, logout } from '../controllers/authController.js';
+import { operatorLogin } from '../controllers/operatorAuthController.js';
 import { authenticate } from '../middleware/auth.js';
 import { ValidationError } from '../middleware/errorHandler.js';
+
+import logger from '../utils/logger.js';
 
 const router = express.Router();
 
@@ -18,6 +21,36 @@ const validate = (req, res, next) => {
   }
   next();
 };
+
+/**
+ * POST /api/v1/auth/operator/login
+ * Login operatore (username/password)
+ * IMPORTANTE: Questa route deve essere definita PRIMA di eventuali route parametriche
+ */
+// Definisci la route con path esplicito
+router.post('/operator/login', [
+    body('username')
+      .notEmpty()
+      .withMessage('Username richiesto')
+      .isString()
+      .withMessage('Username deve essere una stringa')
+      .trim()
+      .isLength({ min: 3, max: 50 })
+      .withMessage('Username deve essere tra 3 e 50 caratteri'),
+    body('password')
+      .notEmpty()
+      .withMessage('Password richiesta')
+      .isString()
+      .withMessage('Password deve essere una stringa')
+      .isLength({ min: 6 })
+      .withMessage('Password deve essere di almeno 6 caratteri'),
+  ],
+  validate,
+  operatorLogin
+);
+
+// Log quando le route vengono registrate
+logger.info('Route /operator/login registrata');
 
 /**
  * POST /api/v1/auth/login

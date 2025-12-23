@@ -4,7 +4,7 @@ import 'package:console/core/theme/app_colors.dart';
 import 'package:console/features/lockers/domain/models/locker.dart';
 import 'package:console/features/lockers/domain/models/locker_type.dart';
 import 'package:console/features/lockers/domain/repositories/locker_repository.dart';
-import 'package:console/features/lockers/data/repositories/locker_repository_mock.dart';
+import 'package:console/features/lockers/data/repositories/locker_repository_api.dart';
 import 'package:console/features/reports/domain/models/report.dart';
 import 'package:console/features/reports/data/mock_reports.dart';
 import 'package:console/locker_detail_page.dart';
@@ -23,7 +23,7 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  final LockerRepository _lockerRepository = LockerRepositoryMock();
+  final LockerRepository _lockerRepository = LockerRepositoryApi();
   final TextEditingController _searchController = TextEditingController();
   
   List<Locker> _allLockers = [];

@@ -5,7 +5,7 @@ import 'package:console/features/lockers/domain/models/locker.dart';
 import 'package:console/features/lockers/domain/models/locker_cell.dart';
 import 'package:console/features/lockers/domain/models/cell_type.dart';
 import 'package:console/features/lockers/domain/repositories/locker_repository.dart';
-import 'package:console/features/lockers/data/repositories/locker_repository_mock.dart';
+import 'package:console/features/lockers/data/repositories/locker_repository_api.dart';
 import 'package:console/features/reports/domain/models/report.dart';
 import 'package:console/features/reports/data/mock_reports.dart';
 
@@ -24,7 +24,7 @@ class LockerDetailPage extends StatefulWidget {
 }
 
 class _LockerDetailPageState extends State<LockerDetailPage> {
-  final LockerRepository _lockerRepository = LockerRepositoryMock();
+  final LockerRepository _lockerRepository = LockerRepositoryApi();
   
   late Locker _currentLocker;
   List<LockerCell> _cells = [];
