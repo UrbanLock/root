@@ -47,7 +47,7 @@ const operatoreSchema = new mongoose.Schema(
   },
   {
     timestamps: false,
-    collection: 'operatori', // Nome collezione MongoDB esistente
+    collection: 'operatore', // Nome collezione MongoDB esistente (singolare)
     strict: false, // Permetti campi aggiuntivi non definiti nello schema
   }
 );

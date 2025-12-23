@@ -17,29 +17,47 @@ export async function operatorLogin(req, res, next) {
       throw new ValidationError('Username e password richiesti');
     }
 
-    // Normalizza username (trim e lowercase per ricerca case-insensitive)
+    // Normalizza username (trim)
     const searchUsername = username.trim();
     const searchUsernameLower = searchUsername.toLowerCase();
     
-    logger.info(`Tentativo login operatore: username=${searchUsername}`);
+    logger.info(`Tentativo login operatore: username="${searchUsername}" (lowercase: "${searchUsernameLower}")`);
 
     // Cerca operatore per username nella collezione operatori
-    // Cerca sia con il valore esatto che con lowercase per compatibilità
-    const operatore = await Operatore.findOne({ 
+    // Prova prima con il valore esatto, poi con lowercase, poi case-insensitive
+    let operatore = await Operatore.findOne({ 
       $or: [
         { username: searchUsername },
-        { username: searchUsernameLower }
+        { username: searchUsernameLower },
+        { username: { $regex: new RegExp(`^${searchUsername}$`, 'i') } }
       ]
     }).select('+passwordHash');
 
-    // Per sicurezza, non rivelare se l'utente esiste o meno
-    // Restituisci sempre lo stesso messaggio di errore
+    // Se non trovato, prova anche senza select per vedere se esiste
     if (!operatore) {
-      logger.warn(`Tentativo login fallito: operatore non trovato (username: ${searchUsername})`);
+      const operatoreTest = await Operatore.findOne({ 
+        $or: [
+          { username: searchUsername },
+          { username: searchUsernameLower },
+          { username: { $regex: new RegExp(`^${searchUsername}$`, 'i') } }
+        ]
+      });
+      
+      if (operatoreTest) {
+        logger.warn(`Operatore trovato ma passwordHash non disponibile: ${operatoreTest.operatoreId}`);
+        throw new UnauthorizedError('Errore di configurazione account');
+      }
+      
+      logger.warn(`Tentativo login fallito: operatore non trovato (username: "${searchUsername}")`);
+      // Log tutti gli operatori disponibili per debug (solo in development)
+      if (process.env.NODE_ENV === 'development') {
+        const allOperatori = await Operatore.find({}).select('username operatoreId');
+        logger.debug(`Operatori disponibili nel DB: ${JSON.stringify(allOperatori.map(op => ({ username: op.username, id: op.operatoreId })))}`);
+      }
       throw new UnauthorizedError('Credenziali non valide');
     }
 
-    logger.info(`Operatore trovato: ${operatore.operatoreId} (${operatore.nome} ${operatore.cognome})`);
+    logger.info(`Operatore trovato: ${operatore.operatoreId} (${operatore.nome} ${operatore.cognome}), username nel DB: "${operatore.username}"`);
 
     // Verifica che operatore sia attivo (se il campo esiste)
     if (operatore.attivo !== undefined && operatore.attivo === false) {
@@ -54,27 +72,34 @@ export async function operatorLogin(req, res, next) {
     }
 
     // Verifica password
+    logger.info(`Verifica password: passwordHash nel DB="${operatore.passwordHash}", password ricevuta="${password}"`);
+    
     // Prova prima con bcrypt (per hash bcrypt reali)
-    // Se fallisce, prova confronto diretto (per hash di test come "hash_pwd_1")
     let isPasswordValid = false;
     try {
-      // bcrypt.compare gestisce anche hash non validi senza lanciare errori
       isPasswordValid = await bcrypt.compare(password, operatore.passwordHash);
+      logger.info(`Bcrypt compare risultato: ${isPasswordValid}`);
     } catch (error) {
-      // Se bcrypt.compare lancia un errore (raro), prova confronto diretto
-      logger.debug(`Bcrypt compare errore, prova confronto diretto: ${error.message}`);
+      logger.info(`Bcrypt compare errore: ${error.message}`);
       isPasswordValid = false;
     }
 
     // Se bcrypt non ha funzionato, prova confronto diretto (per hash di test)
     if (!isPasswordValid) {
       isPasswordValid = (operatore.passwordHash === password);
+      logger.info(`Confronto diretto risultato: ${isPasswordValid}`);
     }
 
     if (!isPasswordValid) {
-      logger.warn(`Tentativo login fallito: password non valida (operatoreId: ${operatore.operatoreId})`);
+      logger.warn(`Tentativo login fallito: password non valida (operatoreId: ${operatore.operatoreId})`, {
+        passwordHashLength: operatore.passwordHash?.length,
+        passwordLength: password?.length,
+        passwordHashStartsWith: operatore.passwordHash?.substring(0, 10),
+      });
       throw new UnauthorizedError('Credenziali non valide');
     }
+    
+    logger.info(`Password valida per operatore ${operatore.operatoreId}`);
 
     // Genera tokens JWT
     // Il token contiene operatoreId come utenteId per compatibilità con il sistema esistente
