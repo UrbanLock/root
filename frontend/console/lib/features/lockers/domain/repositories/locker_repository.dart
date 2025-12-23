@@ -10,6 +10,7 @@ abstract class LockerRepository {
   Future<List<LockerCell>> getLockerCells(String lockerId);
   Future<LockerCellStats> getLockerCellStats(String lockerId);
   Future<bool> updateLockerStatus(String lockerId, bool online);
+  Future<bool> updateCellStatus(String cellId, String stato);
 }
 
 

@@ -342,29 +342,74 @@ class _LockerDetailPageState extends State<LockerDetailPage> {
     }
   }
 
-  void _updateCellStatus(LockerCell cell, bool skipDialog) {
-    setState(() {
-      final index = _cells.indexWhere((c) => c.id == cell.id);
-      if (index != -1) {
-        // Crea una nuova istanza della cella con lo stato invertito
-        final updatedCell = LockerCell(
-          id: cell.id,
-          cellNumber: cell.cellNumber,
-          type: cell.type,
-          size: cell.size,
-          isAvailable: !cell.isAvailable, // Inverti solo questa cella
-          pricePerHour: cell.pricePerHour,
-          pricePerDay: cell.pricePerDay,
-          itemName: cell.itemName,
-          itemDescription: cell.itemDescription,
-          itemImageUrl: cell.itemImageUrl,
-          storeName: cell.storeName,
-          availableUntil: cell.availableUntil,
-          borrowDuration: cell.borrowDuration,
-        );
-        _cells[index] = updatedCell;
+  Future<void> _updateCellStatus(LockerCell cell, bool skipDialog) async {
+    final newStatus = !cell.isAvailable;
+    // Determina lo stato backend: se disponibile -> 'libera', altrimenti -> 'occupata'
+    final statoBackend = newStatus ? 'libera' : 'occupata';
+    
+    try {
+      // Aggiorna lo stato nel database
+      final success = await _lockerRepository.updateCellStatus(cell.id, statoBackend);
+      
+      if (success) {
+        // Aggiorna lo stato localmente solo se la chiamata API è riuscita
+        setState(() {
+          final index = _cells.indexWhere((c) => c.id == cell.id);
+          if (index != -1) {
+            final updatedCell = LockerCell(
+              id: cell.id,
+              cellNumber: cell.cellNumber,
+              type: cell.type,
+              size: cell.size,
+              isAvailable: newStatus,
+              pricePerHour: cell.pricePerHour,
+              pricePerDay: cell.pricePerDay,
+              itemName: cell.itemName,
+              itemDescription: cell.itemDescription,
+              itemImageUrl: cell.itemImageUrl,
+              storeName: cell.storeName,
+              availableUntil: cell.availableUntil,
+              borrowDuration: cell.borrowDuration,
+            );
+            _cells[index] = updatedCell;
+          }
+        });
+      } else {
+        // Mostra un messaggio di errore
+        if (mounted) {
+          showCupertinoDialog(
+            context: context,
+            builder: (context) => CupertinoAlertDialog(
+              title: const Text('Errore'),
+              content: const Text('Impossibile aggiornare lo stato della cella. Riprova più tardi.'),
+              actions: [
+                CupertinoDialogAction(
+                  child: const Text('OK'),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
+            ),
+          );
+        }
       }
-    });
+    } catch (e) {
+      // Mostra un messaggio di errore
+      if (mounted) {
+        showCupertinoDialog(
+          context: context,
+          builder: (context) => CupertinoAlertDialog(
+            title: const Text('Errore'),
+            content: Text('Errore durante l\'aggiornamento: ${e.toString()}'),
+            actions: [
+              CupertinoDialogAction(
+                child: const Text('OK'),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ],
+          ),
+        );
+      }
+    }
   }
 
   void _showCellOfflineDialog(LockerCell cell) {

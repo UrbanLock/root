@@ -270,5 +270,57 @@ class LockerRepositoryApi implements LockerRepository {
       throw Exception('Errore di connessione: ${e.toString()}');
     }
   }
+
+  @override
+  Future<bool> updateCellStatus(String cellId, String stato) async {
+    try {
+      // Mappa lo stato frontend -> backend
+      // isAvailable = true -> 'libera'
+      // isAvailable = false -> 'occupata' o 'manutenzione'
+      String statoBackend;
+      if (stato == 'libera') {
+        statoBackend = 'libera';
+      } else if (stato == 'manutenzione') {
+        statoBackend = 'manutenzione';
+      } else {
+        statoBackend = 'occupata';
+      }
+
+      final response = await ApiClient.put(
+        '/cells/$cellId',
+        body: {'stato': statoBackend},
+      );
+      
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200 && data['success'] == true) {
+        return true;
+      } else {
+        // Estrai il messaggio di errore più dettagliato
+        String errorMessage = 'Errore nell\'aggiornamento dello stato della cella';
+        
+        // Gestisci diversi formati di errore
+        if (data['error'] != null) {
+          if (data['error'] is Map) {
+            errorMessage = data['error']['message'] ?? errorMessage;
+          } else if (data['error'] is String) {
+            errorMessage = data['error'];
+          }
+        } else if (data['message'] != null) {
+          errorMessage = data['message'];
+        } else if (response.statusCode != 200) {
+          errorMessage = 'Errore HTTP ${response.statusCode}';
+        }
+        
+        throw Exception(errorMessage);
+      }
+    } catch (e) {
+      // Se è già un Exception, rilancialo
+      if (e is Exception) {
+        rethrow;
+      }
+      throw Exception('Errore di connessione: ${e.toString()}');
+    }
+  }
 }
 

@@ -10,6 +10,7 @@ import logger from './utils/logger.js';
 import healthRoutes from './routes/health.js';
 import authRoutes from './routes/auth.js';
 import lockerRoutes from './routes/lockers.js';
+import cellRoutes from './routes/cells.js';
 import { notFound } from './middleware/notFound.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
@@ -49,6 +50,7 @@ app.use(`/api/${config.apiVersion}`, healthRoutes);
 // Monta route auth
 app.use(`/api/${config.apiVersion}/auth`, authRoutes);
 app.use(`/api/${config.apiVersion}/lockers`, lockerRoutes);
+app.use(`/api/${config.apiVersion}/cells`, cellRoutes);
 
 // Log delle route registrate
 logger.info(`Route auth montate su: /api/${config.apiVersion}/auth`);
