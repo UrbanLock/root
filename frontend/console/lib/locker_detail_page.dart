@@ -630,7 +630,24 @@ class _LockerDetailPageState extends State<LockerDetailPage> {
     try {
       final cells = await _lockerRepository.getLockerCells(widget.locker.id);
       setState(() {
-        _cells = cells;
+        // Se il locker è offline, tutte le celle devono essere offline
+        _cells = cells.map((cell) {
+          return LockerCell(
+            id: cell.id,
+            cellNumber: cell.cellNumber,
+            type: cell.type,
+            size: cell.size,
+            isAvailable: _currentLocker.isOnline ? cell.isAvailable : false,
+            pricePerHour: cell.pricePerHour,
+            pricePerDay: cell.pricePerDay,
+            itemName: cell.itemName,
+            itemDescription: cell.itemDescription,
+            itemImageUrl: cell.itemImageUrl,
+            storeName: cell.storeName,
+            availableUntil: cell.availableUntil,
+            borrowDuration: cell.borrowDuration,
+          );
+        }).toList();
         _isLoading = false;
       });
     } catch (e) {
@@ -700,7 +717,7 @@ class _LockerDetailPageState extends State<LockerDetailPage> {
           ),
         ),
         leading: CupertinoNavigationBarBackButton(
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () => Navigator.of(context).pop(_currentLocker),
           color: isDark ? CupertinoColors.white : CupertinoColors.black,
         ),
       ),

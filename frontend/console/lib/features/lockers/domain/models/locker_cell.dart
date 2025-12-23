@@ -31,6 +31,38 @@ class LockerCell {
     this.availableUntil,
     this.borrowDuration,
   });
+
+  LockerCell copyWith({
+    String? id,
+    String? cellNumber,
+    CellType? type,
+    CellSize? size,
+    bool? isAvailable,
+    String? itemName,
+    String? itemDescription,
+    String? itemImageUrl,
+    double? pricePerHour,
+    double? pricePerDay,
+    String? storeName,
+    DateTime? availableUntil,
+    Duration? borrowDuration,
+  }) {
+    return LockerCell(
+      id: id ?? this.id,
+      cellNumber: cellNumber ?? this.cellNumber,
+      type: type ?? this.type,
+      size: size ?? this.size,
+      isAvailable: isAvailable ?? this.isAvailable,
+      pricePerHour: pricePerHour ?? this.pricePerHour,
+      pricePerDay: pricePerDay ?? this.pricePerDay,
+      itemName: itemName ?? this.itemName,
+      itemDescription: itemDescription ?? this.itemDescription,
+      itemImageUrl: itemImageUrl ?? this.itemImageUrl,
+      storeName: storeName ?? this.storeName,
+      availableUntil: availableUntil ?? this.availableUntil,
+      borrowDuration: borrowDuration ?? this.borrowDuration,
+    );
+  }
 }
 
 /// Statistiche delle celle disponibili per tipo in un locker
@@ -49,4 +81,6 @@ class LockerCellStats {
 
   int get totalAvailable => availableBorrowCells + availableDepositCells + availablePickupCells;
 }
+
+
 

@@ -10,6 +10,8 @@ import 'package:console/features/reports/data/mock_reports.dart';
 import 'package:console/locker_detail_page.dart';
 import 'package:console/reports_page.dart';
 import 'package:console/donations_page.dart';
+import 'package:console/analytics_page.dart';
+import 'package:console/rental_cells_page.dart';
 
 class HomePage extends StatefulWidget {
   final ThemeManager themeManager;
@@ -459,7 +461,7 @@ class _HomePageState extends State<HomePage> {
       {'label': 'Crea Locker', 'icon': CupertinoIcons.add_circled, 'route': null},
       {'label': 'Donazioni', 'icon': CupertinoIcons.heart_fill, 'route': 'donations'},
       {'label': 'Segnalazioni', 'icon': CupertinoIcons.exclamationmark_triangle_fill, 'route': 'reports'},
-      {'label': 'Affitto Celle', 'icon': CupertinoIcons.calendar, 'route': null},
+      {'label': 'Affitto Celle', 'icon': CupertinoIcons.calendar, 'route': 'rental'},
       {'label': 'Analytics', 'icon': CupertinoIcons.chart_bar_fill, 'route': null},
     ];
 
@@ -505,6 +507,18 @@ class _HomePageState extends State<HomePage> {
                     Navigator.of(context).push(
                       CupertinoPageRoute(
                         builder: (context) => DonationsPage(themeManager: widget.themeManager),
+                      ),
+                    );
+                  } else if (route == 'rental') {
+                    Navigator.of(context).push(
+                      CupertinoPageRoute(
+                        builder: (context) => RentalCellsPage(themeManager: widget.themeManager),
+                      ),
+                    );
+                  } else if (button['label'] == 'Analytics') {
+                    Navigator.of(context).push(
+                      CupertinoPageRoute(
+                        builder: (context) => AnalyticsPage(themeManager: widget.themeManager),
                       ),
                     );
                   }
@@ -652,7 +666,18 @@ class _HomePageState extends State<HomePage> {
               themeManager: widget.themeManager,
             ),
           ),
-        );
+        ).then((returnedLocker) {
+          // Se viene ritornato un locker aggiornato, aggiorna la lista
+          if (returnedLocker != null && returnedLocker is Locker) {
+            setState(() {
+              final index = _allLockers.indexWhere((l) => l.id == returnedLocker.id);
+              if (index != -1) {
+                _allLockers[index] = returnedLocker;
+                _applyFilters();
+              }
+            });
+          }
+        });
       },
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
