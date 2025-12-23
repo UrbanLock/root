@@ -362,6 +362,7 @@ class _LockerDetailPageState extends State<LockerDetailPage> {
               type: cell.type,
               size: cell.size,
               isAvailable: newStatus,
+              stato: newStatus ? 'libera' : 'manutenzione',
               pricePerHour: cell.pricePerHour,
               pricePerDay: cell.pricePerDay,
               itemName: cell.itemName,
@@ -683,6 +684,7 @@ class _LockerDetailPageState extends State<LockerDetailPage> {
             type: cell.type,
             size: cell.size,
             isAvailable: _currentLocker.isOnline ? cell.isAvailable : false,
+            stato: cell.stato,
             pricePerHour: cell.pricePerHour,
             pricePerDay: cell.pricePerDay,
             itemName: cell.itemName,
@@ -1096,13 +1098,17 @@ class _LockerDetailPageState extends State<LockerDetailPage> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
-                      cell.isAvailable ? 'Disponibile' : 'Occupata',
+                      cell.isAvailable 
+                          ? 'Disponibile' 
+                          : (cell.stato == 'manutenzione' ? 'In manutenzione' : 'Occupata'),
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w500,
                         color: cell.isAvailable
                             ? CupertinoColors.systemGreen
-                            : CupertinoColors.systemRed,
+                            : (cell.stato == 'manutenzione' 
+                                ? CupertinoColors.systemOrange 
+                                : CupertinoColors.systemRed),
                       ),
                     ),
                   ),

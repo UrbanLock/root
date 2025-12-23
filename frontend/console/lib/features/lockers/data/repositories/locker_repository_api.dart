@@ -76,6 +76,7 @@ class LockerRepositoryApi implements LockerRepository {
       type: _mapCellType(json['type'] as String),
       size: _mapCellSize(json['size'] as String),
       isAvailable: json['isAvailable'] as bool? ?? false,
+      stato: json['stato'] as String?,
       pricePerHour: (json['pricePerHour'] as num?)?.toDouble() ?? 0.0,
       pricePerDay: (json['pricePerDay'] as num?)?.toDouble() ?? 0.0,
       itemName: json['itemName'] as String?,

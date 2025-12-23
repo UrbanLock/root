@@ -264,6 +264,7 @@ export async function getLockerCells(req, res, next) {
         type: TIPO_MAPPING[cell.tipo] || cell.tipo,
         size: GRANDEZZA_MAPPING[cell.grandezza] || cell.grandezza,
         isAvailable: cell.stato === 'libera',
+        stato: cell.stato, // Aggiungi lo stato per il frontend
         pricePerHour: prezzo.pricePerHour,
         pricePerDay: prezzo.pricePerDay,
         grandezza: cell.grandezza,

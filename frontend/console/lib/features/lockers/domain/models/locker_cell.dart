@@ -7,6 +7,7 @@ class LockerCell {
   final CellType type;
   final CellSize size;
   final bool isAvailable;
+  final String? stato; // 'libera', 'occupata', 'manutenzione'
   final String? itemName;
   final String? itemDescription;
   final String? itemImageUrl;
@@ -24,6 +25,7 @@ class LockerCell {
     required this.isAvailable,
     required this.pricePerHour,
     required this.pricePerDay,
+    this.stato,
     this.itemName,
     this.itemDescription,
     this.itemImageUrl,
@@ -38,6 +40,7 @@ class LockerCell {
     CellType? type,
     CellSize? size,
     bool? isAvailable,
+    String? stato,
     String? itemName,
     String? itemDescription,
     String? itemImageUrl,
@@ -53,6 +56,7 @@ class LockerCell {
       type: type ?? this.type,
       size: size ?? this.size,
       isAvailable: isAvailable ?? this.isAvailable,
+      stato: stato ?? this.stato,
       pricePerHour: pricePerHour ?? this.pricePerHour,
       pricePerDay: pricePerDay ?? this.pricePerDay,
       itemName: itemName ?? this.itemName,
