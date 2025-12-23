@@ -4,7 +4,9 @@ import {
   getLockerById,
   getLockerCells,
   getLockerCellStats,
+  updateLocker,
 } from '../controllers/lockerController.js';
+import { authenticate } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -17,27 +19,39 @@ const router = express.Router();
 router.get('/', getAllLockers);
 
 /**
- * GET /api/v1/lockers/:id
- * Dettaglio locker
+ * GET /api/v1/lockers/:id/cells/stats
+ * Statistiche celle per locker
  * Parametro: :id (lockerId)
+ * RF2: Calcolo disponibilità tempo reale
+ * IMPORTANTE: Route specifica prima di route generiche
  */
-router.get('/:id', getLockerById);
+router.get('/:id/cells/stats', getLockerCellStats);
 
 /**
  * GET /api/v1/lockers/:id/cells
  * Lista celle di un locker con filtri opzionali
  * Parametro: :id (lockerId)
  * Query params: ?type=deposit|borrow|pickup
+ * IMPORTANTE: Route specifica prima di route generiche
  */
 router.get('/:id/cells', getLockerCells);
 
 /**
- * GET /api/v1/lockers/:id/cells/stats
- * Statistiche celle per locker
+ * PUT /api/v1/lockers/:id
+ * Aggiorna locker (RF13)
  * Parametro: :id (lockerId)
- * RF2: Calcolo disponibilità tempo reale
+ * Body: { nome?, coordinate?, stato?, dimensione?, tipo?, descrizione?, dataRipristino?, online?, operatoreCreatoreId? }
+ * Richiede autenticazione
+ * IMPORTANTE: Route PUT prima di GET /:id per evitare conflitti
  */
-router.get('/:id/cells/stats', getLockerCellStats);
+router.put('/:id', authenticate, updateLocker);
+
+/**
+ * GET /api/v1/lockers/:id
+ * Dettaglio locker
+ * Parametro: :id (lockerId)
+ */
+router.get('/:id', getLockerById);
 
 export default router;
 

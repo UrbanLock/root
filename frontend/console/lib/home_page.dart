@@ -12,6 +12,8 @@ import 'package:console/reports_page.dart';
 import 'package:console/donations_page.dart';
 import 'package:console/analytics_page.dart';
 import 'package:console/rental_cells_page.dart';
+import 'package:console/core/api/operator_auth_service.dart';
+import 'package:console/login_page.dart';
 
 class HomePage extends StatefulWidget {
   final ThemeManager themeManager;
@@ -43,29 +45,71 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  void _updateLockerStatus(Locker locker, bool skipDialog) {
-    setState(() {
-      // Trova il locker nella lista e aggiorna il suo stato
-      final index = _allLockers.indexWhere((l) => l.id == locker.id);
-      if (index != -1) {
-        // Crea una nuova istanza del locker con lo stato invertito
-        final updatedLocker = Locker(
-          id: locker.id,
-          name: locker.name,
-          code: locker.code,
-          type: locker.type,
-          totalCells: locker.totalCells,
-          availableCells: locker.availableCells,
-          isActive: locker.isActive,
-          isOnline: !locker.isOnline, // Inverti lo stato
-          description: locker.description,
-          cells: locker.cells,
-          cellStats: locker.cellStats,
-        );
-        _allLockers[index] = updatedLocker;
-        _applyFilters();
+  Future<void> _updateLockerStatus(Locker locker, bool skipDialog) async {
+    final newStatus = !locker.isOnline;
+    
+    try {
+      // Aggiorna lo stato nel database
+      final success = await _lockerRepository.updateLockerStatus(locker.id, newStatus);
+      
+      if (success) {
+        // Aggiorna lo stato localmente solo se la chiamata API è riuscita
+        setState(() {
+          final index = _allLockers.indexWhere((l) => l.id == locker.id);
+          if (index != -1) {
+            final updatedLocker = Locker(
+              id: locker.id,
+              name: locker.name,
+              code: locker.code,
+              type: locker.type,
+              totalCells: locker.totalCells,
+              availableCells: locker.availableCells,
+              isActive: locker.isActive,
+              isOnline: newStatus,
+              description: locker.description,
+              cells: locker.cells,
+              cellStats: locker.cellStats,
+            );
+            _allLockers[index] = updatedLocker;
+            _applyFilters();
+          }
+        });
+      } else {
+        // Mostra un messaggio di errore
+        if (mounted) {
+          showCupertinoDialog(
+            context: context,
+            builder: (context) => CupertinoAlertDialog(
+              title: const Text('Errore'),
+              content: const Text('Impossibile aggiornare lo stato del locker. Riprova più tardi.'),
+              actions: [
+                CupertinoDialogAction(
+                  child: const Text('OK'),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
+            ),
+          );
+        }
       }
-    });
+    } catch (e) {
+      // Mostra un messaggio di errore
+      if (mounted) {
+        showCupertinoDialog(
+          context: context,
+          builder: (context) => CupertinoAlertDialog(
+            title: const Text('Errore'),
+            content: Text('Errore durante l\'aggiornamento: ${e.toString()}'),
+            actions: [
+              CupertinoDialogAction(
+                child: const Text('OK'),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ],
+          ),
+        );
+      }
+    }
   }
 
   void _showOfflineDialog(Locker locker) {
@@ -455,6 +499,46 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  void _handleLogout() {
+    final isDark = widget.themeManager.isDarkMode;
+    final navigatorContext = Navigator.of(context);
+    
+    showCupertinoDialog(
+      context: context,
+      builder: (dialogContext) => CupertinoAlertDialog(
+        title: const Text('Conferma Logout'),
+        content: const Text('Sei sicuro di voler effettuare il logout?'),
+        actions: [
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Annulla'),
+          ),
+          CupertinoDialogAction(
+            onPressed: () async {
+              // Chiudi il dialog
+              Navigator.of(dialogContext).pop();
+              
+              // Esegui logout
+              await OperatorAuthService.logout();
+              
+              // Reindirizza alla pagina di login usando il context principale
+              if (mounted) {
+                navigatorContext.pushAndRemoveUntil(
+                  CupertinoPageRoute(
+                    builder: (context) => LoginPage(themeManager: widget.themeManager),
+                  ),
+                  (route) => false, // Rimuovi tutte le route precedenti
+                );
+              }
+            },
+            child: const Text('Logout'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildNavigationBar(bool isDark) {
     final buttons = [
       {'label': 'Home', 'icon': CupertinoIcons.house_fill, 'route': null},
@@ -463,6 +547,7 @@ class _HomePageState extends State<HomePage> {
       {'label': 'Segnalazioni', 'icon': CupertinoIcons.exclamationmark_triangle_fill, 'route': 'reports'},
       {'label': 'Affitto Celle', 'icon': CupertinoIcons.calendar, 'route': 'rental'},
       {'label': 'Analytics', 'icon': CupertinoIcons.chart_bar_fill, 'route': null},
+      {'label': 'Logout', 'icon': CupertinoIcons.power, 'route': 'logout'},
     ];
 
     return Container(
@@ -497,7 +582,9 @@ class _HomePageState extends State<HomePage> {
                 padding: const EdgeInsets.symmetric(vertical: 10),
                 onPressed: () {
                   final route = button['route'] as String?;
-                  if (route == 'reports') {
+                  if (route == 'logout') {
+                    _handleLogout();
+                  } else if (route == 'reports') {
                     Navigator.of(context).push(
                       CupertinoPageRoute(
                         builder: (context) => ReportsPage(themeManager: widget.themeManager),

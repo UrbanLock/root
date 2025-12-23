@@ -364,10 +364,105 @@ export async function getLockerCellStats(req, res, next) {
   }
 }
 
+/**
+ * PUT /api/v1/lockers/:id
+ * Aggiorna locker (RF13)
+ */
+export async function updateLocker(req, res, next) {
+  try {
+    const { id } = req.params;
+    const updateData = req.body;
+
+    logger.info(`Aggiornamento locker ${id}:`, { updateData });
+
+    // Campi che possono essere aggiornati
+    const allowedFields = [
+      'nome',
+      'coordinate',
+      'stato',
+      'dimensione',
+      'tipo',
+      'descrizione',
+      'dataRipristino',
+      'online',
+      'operatoreCreatoreId',
+    ];
+
+    // Filtra solo i campi consentiti
+    const filteredUpdate = {};
+    for (const field of allowedFields) {
+      if (updateData[field] !== undefined) {
+        filteredUpdate[field] = updateData[field];
+      }
+    }
+
+    logger.info(`Campi filtrati per aggiornamento:`, { filteredUpdate });
+
+    // Se coordinate è un oggetto, mantienilo come oggetto
+    if (updateData.coordinate && typeof updateData.coordinate === 'object') {
+      filteredUpdate.coordinate = updateData.coordinate;
+    }
+
+    // Verifica che ci sia almeno un campo da aggiornare
+    if (Object.keys(filteredUpdate).length === 0) {
+      throw new ValidationError('Nessun campo valido da aggiornare');
+    }
+
+    // Trova e aggiorna il locker
+    const locker = await Locker.findOneAndUpdate(
+      { lockerId: id },
+      { $set: filteredUpdate },
+      { new: true, runValidators: true }
+    );
+
+    if (!locker) {
+      throw new NotFoundError(`Locker con ID ${id} non trovato`);
+    }
+
+    logger.info(`Locker ${id} aggiornato con successo: ${Object.keys(filteredUpdate).join(', ')}`);
+
+    // Calcola disponibilità per la risposta
+    const totalCells = await Locker.getTotalCells(locker.lockerId);
+    const availableCells = await Locker.getAvailableCells(locker.lockerId);
+    const tipo = determinaTipoLocker(locker);
+    const availabilityPercentage = totalCells > 0 ? (availableCells / totalCells) * 100 : 0;
+
+    const lockerFormattato = {
+      id: locker.lockerId,
+      name: locker.nome,
+      position: {
+        lat: locker.coordinate.lat,
+        lng: locker.coordinate.lng,
+      },
+      type: tipo,
+      totalCells,
+      availableCells,
+      isActive: locker.stato === 'attivo',
+      description: locker.descrizione || null,
+      availabilityPercentage: Math.round(availabilityPercentage * 100) / 100,
+      stato: locker.stato,
+      dimensione: locker.dimensione,
+      dataRipristino: locker.dataRipristino || null,
+      online: locker.online !== undefined ? locker.online : true,
+      dataCreazione: locker.dataCreazione,
+    };
+
+    res.json({
+      success: true,
+      data: {
+        locker: lockerFormattato,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export default {
   getAllLockers,
   getLockerById,
   getLockerCells,
   getLockerCellStats,
+  updateLocker,
 };
 
