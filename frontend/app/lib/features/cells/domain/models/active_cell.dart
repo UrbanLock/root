@@ -15,6 +15,7 @@ class ActiveCell {
   final DateTime startTime;
   final DateTime? endTime; // Null se non ha scadenza
   final CellUsageType type;
+  final double? cost; // Costo iniziale stimato (solo per depositi, opzionale)
   
   ActiveCell({
     required this.id,
@@ -26,10 +27,31 @@ class ActiveCell {
     required this.startTime,
     this.endTime,
     required this.type,
+    this.cost,
   });
 
   /// Crea un'istanza da JSON restituito dal backend.
   factory ActiveCell.fromJson(Map<String, dynamic> json) {
+    final rawType = (json['type'] as String? ?? '').toLowerCase();
+    CellUsageType parsedType;
+    switch (rawType) {
+      case 'borrow':
+      case 'borrowed':
+        parsedType = CellUsageType.borrowed;
+        break;
+      case 'pickup':
+        parsedType = CellUsageType.pickup;
+        break;
+      case 'deposited':
+      default:
+        parsedType = CellUsageType.deposited;
+        break;
+    }
+
+    final rawCost = json['cost'];
+    final parsedCost =
+        rawCost is num ? rawCost.toDouble() : null;
+
     return ActiveCell(
       id: json['id'] as String,
       lockerId: json['lockerId'] as String,
@@ -41,10 +63,8 @@ class ActiveCell {
       endTime: json['endTime'] != null
           ? DateTime.parse(json['endTime'] as String)
           : null,
-      type: CellUsageType.values.firstWhere(
-        (e) => e.toString().split('.').last == (json['type'] as String? ?? ''),
-        orElse: () => CellUsageType.deposited,
-      ),
+      type: parsedType,
+      cost: parsedCost,
     );
   }
 
@@ -60,6 +80,7 @@ class ActiveCell {
       'startTime': startTime.toIso8601String(),
       'endTime': endTime?.toIso8601String(),
       'type': type.toString().split('.').last,
+      if (cost != null) 'cost': cost,
     };
   }
   

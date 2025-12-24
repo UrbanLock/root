@@ -42,13 +42,30 @@ abstract class CellRepository {
   /// **Risposta**: Lista paginata di celle utilizzate
   Future<List<ActiveCell>> getHistory({int page = 1, int limit = 20});
   
-  /// Richiede una nuova cella per depositare un oggetto
+  /// Richiede una nuova cella (deposito / prestito / pickup)
   /// 
   /// **Endpoint backend**: POST /api/v1/cells/request
-  /// **Body**: { "locker_id": "...", "type": "deposited", "photo": "base64..." }
+  /// **Body**: {
+  ///   "lockerId": "...",
+  ///   "type": "deposited" | "borrow" | "pickup",
+  ///   "photo": "base64..." (opzionale),
+  ///   "geolocalizzazione": { lat, lng } (opzionale)
+  /// }
   /// **Autenticazione**: Richiesta
   /// **Risposta**: { "success": true, "cell": { ... } }
-  Future<ActiveCell> requestCell(String lockerId, {String? photoBase64});
+  Future<ActiveCell> requestCell(
+    String lockerId, {
+    required String type,
+    String? photoBase64,
+    Map<String, dynamic>? geolocation,
+  });
+
+  /// Restituisce una cella di prestito / ordine (termina il noleggio)
+  ///
+  /// **Endpoint backend**: POST /api/v1/cells/return
+  /// **Body**: { "cell_id": "...", "photo": "base64..." (opzionale) }
+  /// **Autenticazione**: Richiesta
+  Future<void> returnCell(String cellId, {String? photoBase64});
 }
 
 

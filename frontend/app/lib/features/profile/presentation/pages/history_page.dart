@@ -163,34 +163,50 @@ class _HistoryPageState extends State<HistoryPage> {
                           ),
                         ),
                       )
-                    : _history.isEmpty
-                        ? Center(
-                            child: Padding(
-                              padding: const EdgeInsets.all(40),
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    CupertinoIcons.clock,
-                                    size: 64,
-                                    color: AppColors.textSecondary(isDark).withOpacity(0.5),
-                                  ),
-                                  const SizedBox(height: 24),
-                                  Text(
-                                    'Nessun utilizzo',
-                                    style: AppTextStyles.title(isDark),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    'I tuoi utilizzi dei lockers appariranno qui',
-                                    style: AppTextStyles.bodySecondary(isDark),
-                                    textAlign: TextAlign.center,
-                                  ),
-                                ],
-                              ),
+                        : _history.isEmpty
+                        ? CustomScrollView(
+                            physics: const BouncingScrollPhysics(
+                              parent: AlwaysScrollableScrollPhysics(),
                             ),
+                            slivers: [
+                              CupertinoSliverRefreshControl(
+                                onRefresh: _loadHistory,
+                              ),
+                              SliverFillRemaining(
+                                hasScrollBody: false,
+                                child: Center(
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(40),
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(
+                                          CupertinoIcons.clock,
+                                          size: 64,
+                                          color: AppColors.textSecondary(isDark).withOpacity(0.5),
+                                        ),
+                                        const SizedBox(height: 24),
+                                        Text(
+                                          'Nessun utilizzo',
+                                          style: AppTextStyles.title(isDark),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Text(
+                                          'I tuoi utilizzi dei lockers appariranno qui',
+                                          style: AppTextStyles.bodySecondary(isDark),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
                           )
                         : CustomScrollView(
+                            physics: const BouncingScrollPhysics(
+                              parent: AlwaysScrollableScrollPhysics(),
+                            ),
                             slivers: [
                               CupertinoSliverRefreshControl(
                                 onRefresh: _loadHistory,
@@ -220,7 +236,6 @@ class _HistoryPageState extends State<HistoryPage> {
                                       }
                                       
                                       final cell = _history[index - 1];
-                                      final isLast = index == _history.length;
                                       
                                       return _buildHistoryItem(
                                         context: context,

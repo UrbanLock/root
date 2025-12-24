@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:app/core/theme/theme_manager.dart';
 import 'package:app/core/styles/app_colors.dart';
 import 'package:app/core/styles/app_text_styles.dart';
+import 'package:app/features/home/presentation/pages/home_page.dart';
 
 /// Schermata obbligatoria per accettare:
 /// - Termini e condizioni di utilizzo
@@ -95,6 +96,19 @@ class _PrivacyTermsPageState extends State<PrivacyTermsPage> {
     setState(() {
       _privacyAccepted = true;
     });
+    // Una volta accettata la privacy (dopo aver letto fino in fondo),
+    // chiudi la schermata tramite il callback dell'app (aggiorna stato / backend)
+    widget.onAccepted();
+
+    // E reindirizza sempre l'utente alla Home dell'app,
+    // azzerando lo stack di navigazione per evitare schermate precedenti.
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      CupertinoPageRoute(
+        builder: (_) => HomePage(themeManager: widget.themeManager),
+      ),
+      (route) => false,
+    );
   }
 
   @override
@@ -137,7 +151,7 @@ class _PrivacyTermsPageState extends State<PrivacyTermsPage> {
                     ],
                   ),
                 ),
-                // Indicatori + pulsante finale
+                // Indicatori di avanzamento (pagine)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   decoration: BoxDecoration(
@@ -150,47 +164,24 @@ class _PrivacyTermsPageState extends State<PrivacyTermsPage> {
                   ),
                   child: SafeArea(
                     top: false,
-                    child: Column(
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: List.generate(2, (index) {
-                            final isActive = _currentPage == index;
-                            return AnimatedContainer(
-                              duration: const Duration(milliseconds: 250),
-                              margin: const EdgeInsets.symmetric(horizontal: 4),
-                              height: 8,
-                              width: isActive ? 24 : 8,
-                              decoration: BoxDecoration(
-                                color: isActive
-                                    ? AppColors.primary(isDark)
-                                    : AppColors.textSecondary(isDark)
-                                        .withOpacity(0.3),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                            );
-                          }),
-                        ),
-                        if (_termsAccepted && _privacyAccepted) ...[
-                          const SizedBox(height: 10),
-                          SizedBox(
-                            width: double.infinity,
-                            child: CupertinoButton(
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              borderRadius: BorderRadius.circular(12),
-                              color: AppColors.primary(isDark),
-                              onPressed: widget.onAccepted,
-                              child: const Text(
-                                'Conferma e chiudi',
-                                style: TextStyle(
-                                  color: CupertinoColors.white,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(2, (index) {
+                        final isActive = _currentPage == index;
+                        return AnimatedContainer(
+                          duration: const Duration(milliseconds: 250),
+                          margin: const EdgeInsets.symmetric(horizontal: 4),
+                          height: 8,
+                          width: isActive ? 24 : 8,
+                          decoration: BoxDecoration(
+                            color: isActive
+                                ? AppColors.primary(isDark)
+                                : AppColors.textSecondary(isDark)
+                                    .withOpacity(0.3),
+                            borderRadius: BorderRadius.circular(4),
                           ),
-                        ],
-                      ],
+                        );
+                      }),
                     ),
                   ),
                 ),
@@ -332,7 +323,8 @@ class _PrivacyTermsPageState extends State<PrivacyTermsPage> {
   }
 
   Widget _buildPrivacyPage(bool isDark) {
-    final canAccept = _privacyScrolledToEnd && !_privacyAccepted;
+    final canAccept =
+        _privacyScrolledToEnd && !_privacyAccepted && _termsAccepted;
     final buttonColor = _privacyAccepted
         ? CupertinoColors.systemGreen
         : (canAccept ? AppColors.primary(isDark) : AppColors.surface(isDark));

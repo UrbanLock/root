@@ -91,9 +91,11 @@ class _DonatePageState extends State<DonatePage> {
   Color _getStatusColor(String status, bool isDark) {
     switch (status) {
       case 'da_visionare':
+        return CupertinoColors.systemOrange; // pending
       case 'in_valutazione':
+        return CupertinoColors.systemBlue; // in review
       case 'in_ritiro':
-        return AppColors.primary(isDark);
+        return CupertinoColors.systemPurple; // pickup scheduled
       case 'concluso':
         return CupertinoColors.systemGreen;
       case 'rifiutato':
@@ -166,31 +168,43 @@ class _DonatePageState extends State<DonatePage> {
                     ? Column(
                         children: [
                           Expanded(
-                            child: Center(
-                              child: Padding(
-                                padding: const EdgeInsets.all(40),
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(
-                                      CupertinoIcons.gift,
-                                      size: 64,
-                                      color: AppColors.textSecondary(isDark).withOpacity(0.5),
-                                    ),
-                                    const SizedBox(height: 24),
-                                    Text(
-                                      'Nessuna donazione',
-                                      style: AppTextStyles.title(isDark),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      'Le tue donazioni appariranno qui',
-                                      style: AppTextStyles.bodySecondary(isDark),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                  ],
+                            child: CustomScrollView(
+                              physics:
+                                  const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+                              slivers: [
+                                CupertinoSliverRefreshControl(
+                                  onRefresh: _loadDonations,
                                 ),
-                              ),
+                                SliverFillRemaining(
+                                  hasScrollBody: false,
+                                  child: Center(
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(40),
+                                      child: Column(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(
+                                            CupertinoIcons.gift,
+                                            size: 64,
+                                            color: AppColors.textSecondary(isDark).withOpacity(0.5),
+                                          ),
+                                          const SizedBox(height: 24),
+                                          Text(
+                                            'Nessuna donazione',
+                                            style: AppTextStyles.title(isDark),
+                                          ),
+                                          const SizedBox(height: 8),
+                                          Text(
+                                            'Le tue donazioni appariranno qui',
+                                            style: AppTextStyles.bodySecondary(isDark),
+                                            textAlign: TextAlign.center,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                           // Pulsante nuova donazione fisso in fondo
@@ -228,6 +242,8 @@ class _DonatePageState extends State<DonatePage> {
                           Expanded(
                             child: CupertinoScrollbar(
                               child: CustomScrollView(
+                                physics:
+                                    const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
                                 slivers: [
                                   CupertinoSliverRefreshControl(
                                     onRefresh: _loadDonations,
@@ -346,6 +362,11 @@ class _DonatePageState extends State<DonatePage> {
                 'status': donation.status,
                 'hasPhoto': donation.photoUrl != null,
                 'rejectionReason': donation.rejectionReason,
+                'lockerId': donation.lockerId,
+                'lockerName': donation.lockerName,
+                'cellId': donation.cellId,
+                'pickupAtComune': donation.pickupAtComune,
+                'scheduledPickup': donation.scheduledPickup,
               },
             ),
           ),

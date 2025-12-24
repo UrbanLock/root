@@ -49,7 +49,7 @@ class ProfilePopup extends StatelessWidget {
             child: BackdropFilter(
               filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
               child: Container(
-                width: 260,
+                width: 240,
                 constraints: const BoxConstraints(maxHeight: 400),
                 decoration: BoxDecoration(
                   color: AppColors.surface(isDark).withOpacity(0.95),
@@ -76,19 +76,19 @@ class ProfilePopup extends StatelessWidget {
       children: [
         // Header profilo
         Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(12),
           child: Row(
             children: [
               Container(
-                width: 48,
-                height: 48,
+                width: 40,
+                height: 40,
                 decoration: BoxDecoration(
                   color: AppColors.primary(isDark).withOpacity(0.2),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
                   CupertinoIcons.person_fill,
-                  size: 24,
+                  size: 20,
                   color: AppColors.primary(isDark),
                 ),
               ),
@@ -144,9 +144,9 @@ class ProfilePopup extends StatelessWidget {
                   title: 'Aiuto e supporto',
                   onTap: onHelpTap,
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 4),
                 Divider(height: 1),
-                const SizedBox(height: 8),
+                const SizedBox(height: 4),
                 // Logout
                 _buildMenuItem(
                   context: context,
@@ -211,19 +211,19 @@ class ProfilePopup extends StatelessWidget {
       padding: EdgeInsets.zero,
       onPressed: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         child: Row(
           children: [
             Container(
-              width: 32,
-              height: 32,
+              width: 28,
+              height: 28,
               decoration: BoxDecoration(
                 color: AppColors.iconBackground(isDark),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Icon(
                 icon,
-                size: 18,
+                size: 16,
                 color: titleColor ?? AppColors.primary(isDark),
               ),
             ),
@@ -233,7 +233,7 @@ class ProfilePopup extends StatelessWidget {
                 title,
                 style: TextStyle(
                   color: titleColor ?? AppColors.text(isDark),
-                  fontSize: 15,
+                    fontSize: 14,
                   fontWeight: FontWeight.w500,
                 ),
               ),

@@ -384,7 +384,10 @@ class _LockerDetailPageState extends State<LockerDetailPage> {
                             children: [
                               // Header con info locker
                               _buildLockerHeader(isDark),
-                              const SizedBox(height: 20),
+                              const SizedBox(height: 16),
+                              // Azioni principali: Deposita / Prendi in prestito
+                              _buildMainActions(isDark),
+                              const SizedBox(height: 24),
                               // Sezione celle per prestito
                               if (_cells.any((c) => c.type == CellType.borrow)) ...[
                                 _buildSectionHeader(
@@ -512,6 +515,86 @@ class _LockerDetailPageState extends State<LockerDetailPage> {
             ],
           ),
         ),
+      ],
+    );
+  }
+
+  /// Azioni principali sopra le liste: CTA rapidi per deposito e prestito
+  Widget _buildMainActions(bool isDark) {
+    final hasBorrow = _cells.any((c) => c.type == CellType.borrow);
+    final hasDeposit = _cells.any((c) => c.type == CellType.deposit);
+
+    if (!hasBorrow && !hasDeposit) {
+      return const SizedBox.shrink();
+    }
+
+    return Row(
+      children: [
+        if (hasDeposit)
+          Expanded(
+            child: CupertinoButton.filled(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              borderRadius: BorderRadius.circular(12),
+              onPressed: () {
+                if (!_isAuthenticated) {
+                  _showLoginRequiredDialog();
+                  return;
+                }
+                // Scorri alla sezione deposito (UX smooth)
+                // L'utente poi sceglie dimensione/cella come oggi
+                // In alternativa si può aprire direttamente la sezione pagamento
+              },
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: const [
+                  Icon(CupertinoIcons.cube_box),
+                  SizedBox(width: 6),
+                  Text(
+                    'Deposita oggetto',
+                    style: TextStyle(
+                      color: CupertinoColors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        if (hasDeposit && hasBorrow) const SizedBox(width: 12),
+        if (hasBorrow)
+          Expanded(
+            child: CupertinoButton(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              borderRadius: BorderRadius.circular(12),
+              color: AppColors.surface(isDark),
+              onPressed: () {
+                if (!_isAuthenticated) {
+                  _showLoginRequiredDialog();
+                  return;
+                }
+                // Per ora lasciamo che l'utente scelga la cella specifica
+                // nella sezione \"Prendi in prestito\" sottostante.
+              },
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    CellType.borrow.icon,
+                    size: 18,
+                    color: AppColors.primary(isDark),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Prendi in prestito',
+                    style: TextStyle(
+                      color: AppColors.text(isDark),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
       ],
     );
   }

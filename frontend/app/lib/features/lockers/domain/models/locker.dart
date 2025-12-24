@@ -12,6 +12,7 @@ class Locker {
   final int availableCells;
   final bool isActive;
   final String? description;
+  final String? bluetoothDeviceId; // Identificatore BLE opzionale
   final List<LockerCell>? cells; // Lista delle celle disponibili (opzionale, caricata on-demand)
   final LockerCellStats? cellStats; // Statistiche delle celle per tipo
 
@@ -24,6 +25,7 @@ class Locker {
     required this.availableCells,
     this.isActive = true,
     this.description,
+    this.bluetoothDeviceId,
     this.cells,
     this.cellStats,
   });
@@ -60,6 +62,7 @@ class Locker {
       availableCells: json['availableCells'] as int? ?? 0,
       isActive: json['isActive'] as bool? ?? true,
       description: json['description'] as String?,
+      bluetoothDeviceId: json['bluetoothDeviceId'] as String?,
     );
   }
 }

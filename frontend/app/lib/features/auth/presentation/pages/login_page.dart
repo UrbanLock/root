@@ -70,7 +70,8 @@ class _LoginPageState extends State<LoginPage> {
             prefs.getBool('privacy_terms_accepted_v1') ?? false;
 
         if (!privacyTermsAccepted) {
-          // Se non ha accettato, naviga alla pagina di privacy/termini
+          // Se non ha accettato, naviga alla pagina di privacy/termini.
+          // La schermata di privacy, una volta accettata, porterà l'utente alla Home.
           await Navigator.of(context).pushReplacement(
             CupertinoPageRoute(
               builder: (context) => PrivacyTermsPage(
@@ -83,9 +84,6 @@ class _LoginPageState extends State<LoginPage> {
                     // Se fallisce, continuiamo comunque a livello locale
                   }
                   await prefs.setBool('privacy_terms_accepted_v1', true);
-                  if (mounted) {
-                    Navigator.of(context).pop(); // Chiudi PrivacyTermsPage
-                  }
                 },
               ),
             ),

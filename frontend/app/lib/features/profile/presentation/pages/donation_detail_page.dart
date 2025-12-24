@@ -25,13 +25,15 @@ class DonationDetailPage extends StatelessWidget {
 
   String _getStatusLabel(String status) {
     switch (status) {
-      case 'in_attesa':
+      case 'da_visionare':
         return 'In attesa di verifica';
-      case 'confermata':
-        return 'Confermata';
-      case 'consegnata':
-        return 'Consegnata';
-      case 'rifiutata':
+      case 'in_valutazione':
+        return 'In valutazione';
+      case 'in_ritiro':
+        return 'Ritiro programmato';
+      case 'concluso':
+        return 'Completata';
+      case 'rifiutato':
         return 'Rifiutata';
       default:
         return 'Sconosciuto';
@@ -40,13 +42,15 @@ class DonationDetailPage extends StatelessWidget {
 
   Color _getStatusColor(String status, bool isDark) {
     switch (status) {
-      case 'in_attesa':
-        return AppColors.primary(isDark);
-      case 'confermata':
-        return CupertinoColors.systemGreen;
-      case 'consegnata':
+      case 'da_visionare':
+        return CupertinoColors.systemOrange;
+      case 'in_valutazione':
+        return CupertinoColors.systemBlue;
+      case 'in_ritiro':
         return CupertinoColors.systemPurple;
-      case 'rifiutata':
+      case 'concluso':
+        return CupertinoColors.systemGreen;
+      case 'rifiutato':
         return CupertinoColors.systemRed;
       default:
         return AppColors.textSecondary(isDark);
@@ -96,6 +100,11 @@ class DonationDetailPage extends StatelessWidget {
         final statusColor = _getStatusColor(status, isDark);
         final rejectionReason = donation['rejectionReason'] as String?;
         final hasPhoto = donation['hasPhoto'] as bool;
+        final lockerName = donation['lockerName'] as String?;
+        final lockerId = donation['lockerId'] as String?;
+        final cellId = donation['cellId'] as String?;
+        final pickupAtComune = donation['pickupAtComune'] as bool? ?? false;
+        final scheduledPickup = donation['scheduledPickup'] as DateTime?;
 
         return CupertinoPageScaffold(
           backgroundColor: AppColors.background(isDark),
@@ -347,7 +356,7 @@ class DonationDetailPage extends StatelessWidget {
                   ],
                   
                   // Messaggio in base allo stato
-                  if (status == 'rifiutata') ...[
+                  if (status == 'rifiutato') ...[
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(16),
@@ -411,7 +420,7 @@ class DonationDetailPage extends StatelessWidget {
                         ],
                       ),
                     ),
-                  ] else if (status == 'confermata') ...[
+                  ] else if (status == 'in_ritiro') ...[
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(16),
@@ -445,7 +454,7 @@ class DonationDetailPage extends StatelessWidget {
                           ),
                           const SizedBox(height: 12),
                           Text(
-                            'La tua donazione è stata approvata! Per completare la procedura, consegna l\'oggetto presso:',
+                            'La tua donazione è stata approvata! Per completare la procedura, consegna l\'oggetto nel punto indicato.',
                             style: TextStyle(
                               fontSize: 14,
                               color: AppColors.text(isDark),
@@ -471,7 +480,9 @@ class DonationDetailPage extends StatelessWidget {
                                     ),
                                     const SizedBox(width: 8),
                                     Text(
-                                      'Comune di Trento',
+                                      pickupAtComune
+                                          ? 'Comune di Trento'
+                                          : (lockerName ?? 'Locker assegnato'),
                                       style: TextStyle(
                                         fontSize: 15,
                                         fontWeight: FontWeight.w600,
@@ -481,37 +492,59 @@ class DonationDetailPage extends StatelessWidget {
                                   ],
                                 ),
                                 const SizedBox(height: 8),
-                                Text(
-                                  'Via Manci, 2\n38122 Trento',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: AppColors.textSecondary(isDark),
+                                if (pickupAtComune) ...[
+                                  Text(
+                                    'Via Manci, 2\n38122 Trento',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: AppColors.textSecondary(isDark),
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  'Orari: Lun-Ven 9:00-17:00',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color: AppColors.textSecondary(isDark),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Orari: Lun-Ven 9:00-17:00',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: AppColors.textSecondary(isDark),
+                                    ),
                                   ),
-                                ),
+                                ] else if (lockerId != null || cellId != null) ...[
+                                  if (lockerId != null) ...[
+                                    Text(
+                                      'Locker: $lockerId',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: AppColors.textSecondary(isDark),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                  ],
+                                  if (cellId != null)
+                                    Text(
+                                      'Cella: $cellId',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: AppColors.textSecondary(isDark),
+                                      ),
+                                    ),
+                                ],
                               ],
                             ),
                           ),
                           const SizedBox(height: 12),
-                          Text(
-                            'Porta con te un documento di identità e menziona che hai una donazione da consegnare tramite l\'app NULL.',
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: AppColors.textSecondary(isDark),
-                              fontStyle: FontStyle.italic,
+                          if (scheduledPickup != null)
+                            Text(
+                              'Appuntamento: ${_formatDate(scheduledPickup)}',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: AppColors.textSecondary(isDark),
+                                fontStyle: FontStyle.italic,
+                              ),
                             ),
-                          ),
                         ],
                       ),
                     ),
-                  ] else if (status == 'consegnata') ...[
+                  ] else if (status == 'concluso') ...[
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(16),

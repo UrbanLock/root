@@ -200,37 +200,53 @@ class _ActiveReservationsPageState extends State<ActiveReservationsPage> {
                           ),
                         ),
                       )
-                    : _activeCells.isEmpty
-                        ? Center(
-                            child: Padding(
-                              padding: const EdgeInsets.all(40),
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    CupertinoIcons.lock,
-                                    size: 64,
-                                    color: AppColors.textSecondary(isDark).withOpacity(0.5),
-                                  ),
-                                  const SizedBox(height: 24),
-                                  Text(
-                                    'Nessuna cella attiva',
-                                    style: AppTextStyles.title(isDark).copyWith(
-                                      fontSize: 22,
-                                      fontWeight: FontWeight.w600,
+                        : _activeCells.isEmpty
+                        ? CustomScrollView(
+                            physics: const BouncingScrollPhysics(
+                              parent: AlwaysScrollableScrollPhysics(),
+                            ),
+                            slivers: [
+                              CupertinoSliverRefreshControl(
+                                onRefresh: _loadActiveCells,
+                              ),
+                              SliverFillRemaining(
+                                hasScrollBody: false,
+                                child: Center(
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(40),
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(
+                                          CupertinoIcons.lock,
+                                          size: 64,
+                                          color: AppColors.textSecondary(isDark).withOpacity(0.5),
+                                        ),
+                                        const SizedBox(height: 24),
+                                        Text(
+                                          'Nessuna cella attiva',
+                                          style: AppTextStyles.title(isDark).copyWith(
+                                            fontSize: 22,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Text(
+                                          'Le tue celle attive appariranno qui',
+                                          style: AppTextStyles.bodySecondary(isDark),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      ],
                                     ),
                                   ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    'Le tue celle attive appariranno qui',
-                                    style: AppTextStyles.bodySecondary(isDark),
-                                    textAlign: TextAlign.center,
-                                  ),
-                                ],
+                                ),
                               ),
-                            ),
+                            ],
                           )
                         : CustomScrollView(
+                            physics: const BouncingScrollPhysics(
+                              parent: AlwaysScrollableScrollPhysics(),
+                            ),
                             slivers: [
                               CupertinoSliverRefreshControl(
                                 onRefresh: _loadActiveCells,

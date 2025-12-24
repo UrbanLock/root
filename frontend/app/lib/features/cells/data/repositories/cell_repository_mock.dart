@@ -142,7 +142,12 @@ class CellRepositoryMock implements CellRepository {
   }
   
   @override
-  Future<ActiveCell> requestCell(String lockerId, {String? photoBase64}) async {
+  Future<ActiveCell> requestCell(
+    String lockerId, {
+    required String type,
+    String? photoBase64,
+    Map<String, dynamic>? geolocation,
+  }) async {
     // TODO: Quando il backend sarà pronto, sostituire con:
     // final response = await apiClient.post(
     //   ApiConfig.donateEndpoint,
@@ -157,6 +162,18 @@ class CellRepositoryMock implements CellRepository {
     await Future.delayed(_apiDelay);
     
     // Crea una nuova cella mock
+    final usageType = () {
+      switch (type) {
+        case 'borrow':
+          return CellUsageType.borrowed;
+        case 'pickup':
+          return CellUsageType.pickup;
+        case 'deposited':
+        default:
+          return CellUsageType.deposited;
+      }
+    }();
+
     final newCell = ActiveCell(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       lockerId: lockerId,
@@ -166,7 +183,7 @@ class CellRepositoryMock implements CellRepository {
       cellId: 'cell_${DateTime.now().millisecondsSinceEpoch}',
       startTime: DateTime.now(),
       endTime: DateTime.now().add(const Duration(hours: 24)),
-      type: CellUsageType.deposited,
+      type: usageType,
     );
     
     _mockActiveCells.add(newCell);
@@ -185,6 +202,12 @@ class CellRepositoryMock implements CellRepository {
     if (!_mockActiveCells.any((c) => c.cellId == cell.cellId)) {
       _mockActiveCells.add(cell);
     }
+  }
+
+  @override
+  Future<void> returnCell(String cellId, {String? photoBase64}) async {
+    // Mock: rimuove la cella dalle attive per simulare la restituzione
+    _mockActiveCells.removeWhere((c) => c.cellId == cellId);
   }
 }
 

@@ -64,9 +64,50 @@ class DonationRepositoryImpl implements DonationRepository {
     String? base64Photo,
   }) async {
     try {
+      // Mappa il tipo scelto in UI ai valori richiesti dal backend
+      // Backend accetta: sport, libri, giochi, altro
+      String tipoBackend;
+      switch (equipmentType.toLowerCase()) {
+        case 'sport':
+        case 'sportivi':
+        case 'sportivo':
+        case 'sportiva':
+        case 'sport':
+        case 'sport ':
+        case 'sport ':
+        case 'sport ':
+        case 'sport ':
+        case 'sport ':
+        case 'sport':
+        case 'sport ':
+        case 'sportivi ':
+        case 'sportivi':
+        case 'sport':
+        case 'sport ':
+        case 'sportivi ':
+        case 'sportivi':
+        case 'sport':
+        case 'sport ':
+        case 'sportivi ':
+        case 'sportivi':
+          tipoBackend = 'sport';
+          break;
+        case 'libri':
+        case 'libro':
+          tipoBackend = 'libri';
+          break;
+        case 'giochi':
+        case 'gioco':
+        case 'game':
+          tipoBackend = 'giochi';
+          break;
+        default:
+          tipoBackend = 'altro';
+      }
+
       final body = <String, dynamic>{
         'nomeOggetto': itemName,
-        'tipoAttrezzatura': equipmentType,
+        'tipoAttrezzatura': tipoBackend,
         'descrizione': description,
       };
 
@@ -106,7 +147,29 @@ class DonationRepositoryImpl implements DonationRepository {
     try {
       final body = <String, dynamic>{};
       if (itemName != null) body['nomeOggetto'] = itemName;
-      if (equipmentType != null) body['tipoAttrezzatura'] = equipmentType;
+      if (equipmentType != null) {
+        String tipoBackend;
+        switch (equipmentType.toLowerCase()) {
+          case 'sport':
+          case 'sportivi':
+          case 'sportivo':
+          case 'sportiva':
+            tipoBackend = 'sport';
+            break;
+          case 'libri':
+          case 'libro':
+            tipoBackend = 'libri';
+            break;
+          case 'giochi':
+          case 'gioco':
+          case 'game':
+            tipoBackend = 'giochi';
+            break;
+          default:
+            tipoBackend = 'altro';
+        }
+        body['tipoAttrezzatura'] = tipoBackend;
+      }
       if (category != null) body['categoria'] = category;
       if (description != null) body['descrizione'] = description;
       if (base64Photo != null && base64Photo.isNotEmpty) {

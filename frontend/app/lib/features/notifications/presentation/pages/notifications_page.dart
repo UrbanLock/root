@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:app/core/theme/theme_manager.dart';
@@ -6,6 +8,9 @@ import 'package:app/core/styles/app_text_styles.dart';
 import 'package:app/features/notifications/domain/models/app_notification.dart';
 import 'package:app/features/notifications/data/repositories/notification_repository_impl.dart';
 import 'package:app/features/notifications/data/repositories/notification_repository.dart';
+import 'package:app/core/di/app_dependencies.dart';
+import 'package:app/features/profile/domain/models/donation.dart';
+import 'package:app/features/profile/presentation/pages/donation_detail_page.dart';
 
 class NotificationsPage extends StatefulWidget {
   final ThemeManager themeManager;
@@ -22,9 +27,11 @@ class NotificationsPage extends StatefulWidget {
 }
 
 class _NotificationsPageState extends State<NotificationsPage> {
-  final NotificationRepository _notificationRepository = NotificationRepositoryImpl();
+  final NotificationRepository _notificationRepository =
+      AppDependencies.notificationRepository;
   List<AppNotification> _notifications = [];
   bool _isLoading = true;
+  bool _showAllReadBanner = false;
 
   @override
   void initState() {
@@ -69,6 +76,21 @@ class _NotificationsPageState extends State<NotificationsPage> {
     await _notificationRepository.markAllAsRead();
     await _loadNotifications();
     widget.onNotificationsUpdated?.call();
+
+    if (mounted) {
+      setState(() {
+        _showAllReadBanner = true;
+      });
+
+      // Nasconde il banner dopo un breve intervallo
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted) {
+          setState(() {
+            _showAllReadBanner = false;
+          });
+        }
+      });
+    }
   }
 
   Future<void> _deleteNotification(AppNotification notification) async {
@@ -147,98 +169,159 @@ class _NotificationsPageState extends State<NotificationsPage> {
               'Notifiche',
               style: AppTextStyles.title(isDark),
             ),
-            trailing: _notifications.isNotEmpty
-                ? CupertinoButton(
-                    padding: EdgeInsets.zero,
-                    minSize: 0,
-                    onPressed: _markAllAsRead,
-                    child: Text(
-                      'Segna tutte',
-                      style: TextStyle(
-                        color: AppColors.primary(isDark),
-                        fontSize: 16,
-                      ),
-                    ),
-                  )
-                : null,
+            trailing: _buildNavBarActions(isDark),
           ),
           child: SafeArea(
             bottom: false,
             child: _isLoading
                 ? const Center(child: CupertinoActivityIndicator())
                 : _notifications.isEmpty
-                    ? Center(
-                        child: Padding(
-                          padding: const EdgeInsets.only(bottom: 100),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                CupertinoIcons.bell_slash,
-                                size: 64,
-                                color: AppColors.textSecondary(isDark),
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                'Nessuna notifica',
-                                style: AppTextStyles.title(isDark),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'Le tue notifiche appariranno qui',
-                                style: AppTextStyles.bodySecondary(isDark),
-                              ),
-                            ],
-                          ),
+                    ? CustomScrollView(
+                        physics: const BouncingScrollPhysics(
+                          parent: AlwaysScrollableScrollPhysics(),
                         ),
+                        slivers: [
+                          CupertinoSliverRefreshControl(
+                            onRefresh: _loadNotifications,
+                          ),
+                          SliverFillRemaining(
+                            hasScrollBody: false,
+                            child: Center(
+                              child: Padding(
+                                padding: const EdgeInsets.only(bottom: 100),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      CupertinoIcons.bell_slash,
+                                      size: 64,
+                                      color: AppColors.textSecondary(isDark),
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Text(
+                                      'Nessuna notifica',
+                                      style: AppTextStyles.title(isDark),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      'Le tue notifiche appariranno qui',
+                                      style: AppTextStyles.bodySecondary(isDark),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       )
                     : Column(
                         children: [
+                          if (_showAllReadBanner) _buildAllReadBanner(isDark),
                           Expanded(
-                            child: ListView(
-                              padding: const EdgeInsets.only(bottom: 100),
-                              children: [
-                                ..._notifications.map((notification) {
-                                  return _buildNotificationItem(
-                                    notification: notification,
-                                    isDark: isDark,
-                                  );
-                                }).toList(),
-                              ],
-                            ),
-                          ),
-                          if (_notifications.isNotEmpty)
-                            Container(
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: AppColors.surface(isDark),
-                                border: Border(
-                                  top: BorderSide(
-                                    color: AppColors.borderColor(isDark).withOpacity(0.1),
-                                    width: 1,
-                                  ),
+                            child: CupertinoScrollbar(
+                              child: CustomScrollView(
+                                physics: const BouncingScrollPhysics(
+                                  parent: AlwaysScrollableScrollPhysics(),
                                 ),
-                              ),
-                              child: SafeArea(
-                                top: false,
-                                child: CupertinoButton(
-                                  color: AppColors.surface(isDark),
-                                  onPressed: _deleteAllNotifications,
-                                  child: Text(
-                                    'Elimina tutte',
-                                    style: TextStyle(
-                                      color: CupertinoColors.systemRed,
-                                      fontWeight: FontWeight.w600,
+                                slivers: [
+                                  CupertinoSliverRefreshControl(
+                                    onRefresh: _loadNotifications,
+                                  ),
+                                  SliverPadding(
+                                    padding:
+                                        const EdgeInsets.only(bottom: 100),
+                                    sliver: SliverList(
+                                      delegate: SliverChildBuilderDelegate(
+                                        (context, index) {
+                                          final notification =
+                                              _notifications[index];
+                                          return _buildNotificationItem(
+                                            notification: notification,
+                                            isDark: isDark,
+                                          );
+                                        },
+                                        childCount: _notifications.length,
+                                      ),
                                     ),
                                   ),
-                                ),
+                                ],
                               ),
                             ),
+                          ),
                         ],
                       ),
           ),
         );
       },
+    );
+  }
+
+  /// Azioni nella navigation bar: "Segna tutte" + cestino
+  Widget? _buildNavBarActions(bool isDark) {
+    if (_notifications.isEmpty) return null;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        CupertinoButton(
+          padding: EdgeInsets.zero,
+          minSize: 0,
+          onPressed: _notifications.isNotEmpty ? _deleteAllNotifications : null,
+          child: Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: CupertinoColors.systemRed.withOpacity(0.08),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              CupertinoIcons.trash,
+              size: 16,
+              color: CupertinoColors.systemRed,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Banner compatto che conferma che tutte le notifiche sono state segnate come lette.
+  Widget _buildAllReadBanner(bool isDark) {
+    return AnimatedOpacity(
+      duration: const Duration(milliseconds: 250),
+      opacity: _showAllReadBanner ? 1.0 : 0.0,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: CupertinoColors.systemGreen.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: CupertinoColors.systemGreen.withOpacity(0.3),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                CupertinoIcons.check_mark_circled_solid,
+                size: 18,
+                color: CupertinoColors.systemGreen,
+              ),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  'Tutte le notifiche sono state segnate come lette',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: AppColors.text(isDark),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -264,7 +347,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
       onDismissed: (_) => _deleteNotification(notification),
       child: CupertinoButton(
         padding: EdgeInsets.zero,
-        onPressed: () => _markAsRead(notification),
+        onPressed: () => _handleNotificationTap(notification),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
@@ -350,5 +433,75 @@ class _NotificationsPageState extends State<NotificationsPage> {
         ),
       ),
     );
+  }
+
+  Future<void> _handleNotificationTap(AppNotification notification) async {
+    // Segna come letta
+    await _markAsRead(notification);
+
+    // Se non c'è payload strutturato, non c'è nulla da aprire
+    if (notification.payload == null) return;
+
+    Map<String, dynamic> payload;
+    try {
+      payload = jsonDecode(notification.payload!) as Map<String, dynamic>;
+    } catch (_) {
+      return;
+    }
+
+    // Donazioni: il backend inserisce donazioneId nello pseudo-payload
+    final donationId = payload['donazioneId'] as String?;
+    if (donationId == null || donationId.isEmpty) {
+      return;
+    }
+
+    try {
+      final repo = AppDependencies.donationRepository;
+      final Donation donation = await repo.getDonationById(donationId);
+      if (!mounted) return;
+
+      final category = donation.category ?? 'Altro';
+
+      await Navigator.of(context).push(
+        CupertinoPageRoute(
+          builder: (context) => DonationDetailPage(
+            themeManager: widget.themeManager,
+            donation: {
+              'id': donation.id,
+              'itemName': donation.itemName,
+              'category': category,
+              'description': donation.description,
+              'date': donation.createdAt,
+              'status': donation.status,
+              'hasPhoto': donation.photoUrl != null,
+              'rejectionReason': donation.rejectionReason,
+              'lockerId': donation.lockerId,
+              'lockerName': donation.lockerName,
+              'cellId': donation.cellId,
+              'pickupAtComune': donation.pickupAtComune,
+              'scheduledPickup': donation.scheduledPickup,
+            },
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      await showCupertinoDialog(
+        context: context,
+        builder: (context) => CupertinoAlertDialog(
+          title: const Text('Errore'),
+          content: Text(
+            'Impossibile aprire i dettagli della donazione.\n$e',
+          ),
+          actions: [
+            CupertinoDialogAction(
+              isDefaultAction: true,
+              child: const Text('OK'),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+          ],
+        ),
+      );
+    }
   }
 }

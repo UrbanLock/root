@@ -75,7 +75,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
 
   // Stato notifiche
   int _unreadNotificationsCount = 0;
-  final NotificationRepository _notificationRepository = NotificationRepositoryImpl();
+  final NotificationRepository _notificationRepository =
+      AppDependencies.notificationRepository;
 
   @override
   void initState() {

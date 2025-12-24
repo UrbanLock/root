@@ -23,6 +23,12 @@ const lockerSchema = new mongoose.Schema(
         required: true,
       },
     },
+    // Identificatore dispositivo BLE associato al locker (per scansione Bluetooth reale)
+    bluetoothDeviceId: {
+      type: String,
+      default: null,
+      trim: true,
+    },
     stato: {
       type: String,
       enum: ['attivo', 'manutenzione', 'disattivo'],

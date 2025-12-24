@@ -49,14 +49,22 @@ class _ReportIssuePageState extends State<ReportIssuePage> {
   String? _selectedCategory;
   bool _isSubmitting = false;
 
-  // Categorie di problemi
+  // Categorie di problemi (allineate con il backend)
+  //
+  // Backend accetta SOLO questi valori per `categoria`:
+  // - anomalia
+  // - guasto
+  // - vandalismo
+  // - pulizia
+  // - sicurezza
+  // - altro
   final List<Map<String, String>> _categories = [
-    {'id': 'cell_not_opening', 'label': 'Cella non si apre'},
-    {'id': 'cell_not_closing', 'label': 'Cella non si chiude'},
-    {'id': 'bluetooth_connection', 'label': 'Problema connessione Bluetooth'},
-    {'id': 'damaged_cell', 'label': 'Cella danneggiata'},
-    {'id': 'damaged_locker', 'label': 'Locker danneggiato'},
-    {'id': 'other', 'label': 'Altro'},
+    {'id': 'anomalia', 'label': 'Anomalia di funzionamento'},
+    {'id': 'guasto', 'label': 'Guasto tecnico'},
+    {'id': 'vandalismo', 'label': 'Danni / vandalismo'},
+    {'id': 'pulizia', 'label': 'Pulizia / decoro'},
+    {'id': 'sicurezza', 'label': 'Sicurezza / accesso'},
+    {'id': 'altro', 'label': 'Altro'},
   ];
 
   @override
@@ -66,27 +74,13 @@ class _ReportIssuePageState extends State<ReportIssuePage> {
     if (widget.existingReport != null) {
       final report = widget.existingReport!;
       _descriptionController.text = report['description'] as String? ?? '';
-      
-      // Mappa la categoria dal label all'id
-      final categoryLabel = report['category'] as String? ?? '';
-      final categoryMap = {
-        'Cella non si apre': 'cell_not_opening',
-        'Cella non si chiude': 'cell_not_closing',
-        'Problema connessione Bluetooth': 'bluetooth_connection',
-        'Cella danneggiata': 'damaged_cell',
-        'Locker danneggiato': 'damaged_locker',
-        'Altro': 'other',
-      };
-      _selectedCategory = categoryMap[categoryLabel];
-      
-      // Se la categoria non è stata trovata, prova a usare direttamente il valore
-      if (_selectedCategory == null) {
-        // Cerca nell'elenco delle categorie per trovare quella corrispondente
-        for (var cat in _categories) {
-          if (cat['label'] == categoryLabel) {
-            _selectedCategory = cat['id'];
-            break;
-          }
+
+      // Backend restituisce `category` come ID (es. "anomalia", "guasto", ...)
+      final existingCategoryId = report['category'] as String? ?? '';
+      for (var cat in _categories) {
+        if (cat['id'] == existingCategoryId) {
+          _selectedCategory = cat['id'];
+          break;
         }
       }
     }

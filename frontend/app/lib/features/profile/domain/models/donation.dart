@@ -12,6 +12,8 @@ class Donation {
   final String? lockerId;
   final String? lockerName;
   final String? lockerType;
+  final String? cellId;
+  final bool pickupAtComune;
 
   const Donation({
     required this.id,
@@ -27,6 +29,8 @@ class Donation {
     required this.lockerId,
     required this.lockerName,
     required this.lockerType,
+    required this.cellId,
+    required this.pickupAtComune,
   });
 
   /// Crea una Donation a partire dal JSON del backend
@@ -54,6 +58,8 @@ class Donation {
       lockerId: json['lockerId'] as String?,
       lockerName: json['lockerName'] as String?,
       lockerType: json['lockerType'] as String?,
+      cellId: json['cellaId'] as String?,
+      pickupAtComune: json['ritiroPressoComune'] as bool? ?? false,
     );
   }
 

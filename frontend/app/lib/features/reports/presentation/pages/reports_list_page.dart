@@ -168,34 +168,51 @@ class _ReportsListPageState extends State<ReportsListPage> {
                     ? Column(
                         children: [
                           Expanded(
-                            child: Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    CupertinoIcons.exclamationmark_triangle,
-                                    size: 60,
-                                    color: AppColors.textSecondary(isDark),
-                                  ),
-                                  const SizedBox(height: 16),
-                                  Text(
-                                    'Nessuna segnalazione',
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.w600,
-                                      color: AppColors.text(isDark),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    'Le tue segnalazioni appariranno qui',
-                                    style: TextStyle(
-                                      fontSize: 15,
-                                      color: AppColors.textSecondary(isDark),
-                                    ),
-                                  ),
-                                ],
+                            child: CustomScrollView(
+                              physics: const BouncingScrollPhysics(
+                                parent: AlwaysScrollableScrollPhysics(),
                               ),
+                              slivers: [
+                                CupertinoSliverRefreshControl(
+                                  onRefresh: _loadReports,
+                                ),
+                                SliverFillRemaining(
+                                  hasScrollBody: false,
+                                  child: Center(
+                                    child: Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Icon(
+                                          CupertinoIcons
+                                              .exclamationmark_triangle,
+                                          size: 60,
+                                          color:
+                                              AppColors.textSecondary(isDark),
+                                        ),
+                                        const SizedBox(height: 16),
+                                        Text(
+                                          'Nessuna segnalazione',
+                                          style: TextStyle(
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.w600,
+                                            color: AppColors.text(isDark),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Text(
+                                          'Le tue segnalazioni appariranno qui',
+                                          style: TextStyle(
+                                            fontSize: 15,
+                                            color: AppColors.textSecondary(
+                                                isDark),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                           // Pulsante nuova segnalazione fisso in fondo
@@ -234,13 +251,27 @@ class _ReportsListPageState extends State<ReportsListPage> {
                           // Lista scrollabile delle segnalazioni
                           Expanded(
                             child: CupertinoScrollbar(
-                              child: ListView(
-                                padding: const EdgeInsets.all(16),
-                                children: [
-                                  ..._reports.map((report) =>
-                                      _buildReportCard(report, isDark)),
-                                  // Spazio extra in fondo per il pulsante
-                                  const SizedBox(height: 80),
+                              child: CustomScrollView(
+                                physics: const BouncingScrollPhysics(
+                                  parent: AlwaysScrollableScrollPhysics(),
+                                ),
+                                slivers: [
+                                  CupertinoSliverRefreshControl(
+                                    onRefresh: _loadReports,
+                                  ),
+                                  SliverPadding(
+                                    padding: const EdgeInsets.all(16),
+                                    sliver: SliverList(
+                                      delegate: SliverChildBuilderDelegate(
+                                        (context, index) {
+                                          final report = _reports[index];
+                                          return _buildReportCard(
+                                              report, isDark);
+                                        },
+                                        childCount: _reports.length,
+                                      ),
+                                    ),
+                                  ),
                                 ],
                               ),
                             ),

@@ -7,7 +7,6 @@ import 'package:app/core/styles/app_text_styles.dart';
 import 'package:app/core/notifications/notification_service.dart';
 import 'package:app/core/di/app_dependencies.dart';
 import 'package:app/features/cells/domain/models/active_cell.dart';
-import 'package:app/features/cells/data/repositories/cell_repository_mock.dart';
 import 'package:app/features/lockers/domain/models/locker_cell.dart';
 import 'package:app/features/reports/presentation/pages/report_issue_page.dart';
 
@@ -61,6 +60,7 @@ class _OpenCellPageState extends State<OpenCellPage> {
   // Stati apertura/chiusura cella
   bool _cellOpened = false;
   bool _waitingForDoorClose = false;
+  ActiveCell? _activeCell;
   
   StreamSubscription<BluetoothAdapterState>? _bluetoothStateSubscription;
   StreamSubscription<List<ScanResult>>? _scanResultsSubscription;
@@ -271,6 +271,33 @@ class _OpenCellPageState extends State<OpenCellPage> {
 
   /// Apre la cella e attende la chiusura
   Future<void> _openCell() async {
+    // Richiedi cella e apri tramite backend
+    final repository = AppDependencies.cellRepository;
+    if (repository == null) {
+      setState(() {
+        _statusMessage = 'Servizio celle non disponibile.';
+      });
+      return;
+    }
+
+    try {
+      if (_activeCell == null) {
+        // Richiedi una cella di tipo prestito
+        final requested = await repository.requestCell(
+          widget.lockerId,
+          type: 'borrow',
+        );
+        _activeCell = requested;
+      }
+
+      await repository.openCell(_activeCell!.cellId);
+    } catch (e) {
+      setState(() {
+        _statusMessage = 'Errore nell\'apertura della cella: $e';
+      });
+      return;
+    }
+
     setState(() {
       _cellOpened = true;
       _waitingForDoorClose = true;
@@ -319,28 +346,20 @@ class _OpenCellPageState extends State<OpenCellPage> {
       _waitingForDoorClose = false;
     });
 
-    debugPrint('📱 [CLOSE] Aggiungo cella alle celle attive...');
-    // ⚠️ SOLO PER TESTING: Aggiungi la cella alle celle attive
-    // IN PRODUZIONE: Il backend aggiungerà automaticamente quando viene aperta una cella
-    final activeCell = ActiveCell(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      lockerId: widget.lockerId,
-      lockerName: widget.lockerName,
-      lockerType: 'Prestito',
-      cellNumber: widget.cell.cellNumber,
-      cellId: widget.cell.id,
-      startTime: DateTime.now(),
-      endTime: widget.cell.borrowDuration != null
-          ? DateTime.now().add(widget.cell.borrowDuration!)
-          : DateTime.now().add(const Duration(days: 7)),
-      type: CellUsageType.borrowed,
-    );
-    
-    // Aggiungi alle celle attive (solo per testing, in produzione sarà il backend)
-    final repository = AppDependencies.cellRepository;
-    if (repository is CellRepositoryMock) {
-      repository.addActiveCell(activeCell);
-    }
+    final activeCell = _activeCell ??
+        ActiveCell(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          lockerId: widget.lockerId,
+          lockerName: widget.lockerName,
+          lockerType: 'Prestito',
+          cellNumber: widget.cell.cellNumber,
+          cellId: widget.cell.id,
+          startTime: DateTime.now(),
+          endTime: widget.cell.borrowDuration != null
+              ? DateTime.now().add(widget.cell.borrowDuration!)
+              : DateTime.now().add(const Duration(days: 7)),
+          type: CellUsageType.borrowed,
+        );
     
     debugPrint('📱 [CLOSE] Programmo promemoria per restituzione...');
     // Programma promemoria per restituire l'oggetto

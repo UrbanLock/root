@@ -7,7 +7,6 @@ import 'package:app/core/styles/app_text_styles.dart';
 import 'package:app/core/notifications/notification_service.dart';
 import 'package:app/core/di/app_dependencies.dart';
 import 'package:app/features/cells/domain/models/active_cell.dart';
-import 'package:app/features/cells/data/repositories/cell_repository_mock.dart';
 import 'package:app/features/lockers/domain/models/locker_cell.dart';
 import 'package:app/features/lockers/domain/models/cell_type.dart';
 import 'package:app/features/reports/presentation/pages/report_issue_page.dart';
@@ -66,6 +65,7 @@ class _DepositOpenCellPageState extends State<DepositOpenCellPage> {
   StreamSubscription<BluetoothAdapterState>? _bluetoothStateSubscription;
   StreamSubscription<List<ScanResult>>? _scanResultsSubscription;
   Timer? _doorCloseTimer;
+  ActiveCell? _activeCell;
 
   @override
   void initState() {
@@ -268,6 +268,32 @@ class _DepositOpenCellPageState extends State<DepositOpenCellPage> {
 
   /// Apre la cella e attende la chiusura
   Future<void> _openCell() async {
+    // Richiedi/associa cella di deposito e apri tramite backend
+    final repository = AppDependencies.cellRepository;
+    if (repository == null) {
+      setState(() {
+        _statusMessage = 'Servizio celle non disponibile.';
+      });
+      return;
+    }
+
+    try {
+      if (_activeCell == null) {
+        final requested = await repository.requestCell(
+          widget.lockerId,
+          type: widget.cell.type == CellType.pickup ? 'pickup' : 'deposited',
+        );
+        _activeCell = requested;
+      }
+
+      await repository.openCell(_activeCell!.cellId);
+    } catch (e) {
+      setState(() {
+        _statusMessage = 'Errore nell\'apertura della cella: $e';
+      });
+      return;
+    }
+
     setState(() {
       _cellOpened = true;
       _waitingForDoorClose = false; // Prima l'utente deve mettere gli oggetti
@@ -320,12 +346,11 @@ class _DepositOpenCellPageState extends State<DepositOpenCellPage> {
     // TODO BACKEND: Salvare deposito nel backend
     // await depositRepository.createDeposit(...);
 
-    final repository = AppDependencies.cellRepository;
-    
     // Se skipBluetoothVerification è false, significa che è uno sblocco di una cella già depositata
     // In questo caso, rimuovi la cella dalle attive e aggiungi allo storico
     if (!widget.skipBluetoothVerification) {
       debugPrint('📱 [CLOSE] Rimuovo cella dalle celle attive (sblocco)...');
+      final repository = AppDependencies.cellRepository;
       if (repository != null) {
         try {
           await repository.notifyCellClosed(widget.cell.id);
@@ -334,28 +359,22 @@ class _DepositOpenCellPageState extends State<DepositOpenCellPage> {
         }
       }
     } else {
-      // È un nuovo deposito, aggiungi alle celle attive
-      debugPrint('📱 [CLOSE] Aggiungo cella alle celle attive (nuovo deposito)...');
-      // ⚠️ SOLO PER TESTING: Aggiungi la cella alle celle attive
-      // IN PRODUZIONE: Il backend aggiungerà automaticamente quando viene aperta una cella
-      final activeCell = ActiveCell(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        lockerId: widget.lockerId,
-        lockerName: widget.lockerName,
-        lockerType: 'Deposito',
-        cellNumber: widget.cell.cellNumber,
-        cellId: widget.cell.id,
-        startTime: DateTime.now(),
-        endTime: DateTime.now().add(widget.duration),
-        type: widget.cell.type == CellType.pickup 
-            ? CellUsageType.pickup 
-            : CellUsageType.deposited,
-      );
-      
-      // Aggiungi alle celle attive (solo per testing, in produzione sarà il backend)
-      if (repository is CellRepositoryMock) {
-        repository.addActiveCell(activeCell);
-      }
+      // È un nuovo deposito: ActiveCell è già gestita dal backend; usiamo i suoi dati
+      debugPrint('📱 [CLOSE] Nuovo deposito completato, programmo promemoria...');
+      final activeCell = _activeCell ??
+          ActiveCell(
+            id: DateTime.now().millisecondsSinceEpoch.toString(),
+            lockerId: widget.lockerId,
+            lockerName: widget.lockerName,
+            lockerType: 'Deposito',
+            cellNumber: widget.cell.cellNumber,
+            cellId: widget.cell.id,
+            startTime: DateTime.now(),
+            endTime: DateTime.now().add(widget.duration),
+            type: widget.cell.type == CellType.pickup
+                ? CellUsageType.pickup
+                : CellUsageType.deposited,
+          );
       
       debugPrint('📱 [CLOSE] Programmo promemoria per ritiro deposito...');
       // Programma promemoria per ritirare il deposito

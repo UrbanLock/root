@@ -279,13 +279,10 @@ class _ReturnCellPageState extends State<ReturnCellPage> {
       _waitingForDoorClose = false;
     });
 
-    // TODO BACKEND: Notifica restituzione al backend
-    // POST /api/v1/cells/return
-    // Body: { cell_id, photo_base64 }
     final repository = AppDependencies.cellRepository;
     if (repository != null) {
       try {
-        await repository.notifyCellClosed(widget.cell.cellId);
+        await repository.returnCell(widget.cell.cellId);
       } catch (e) {
         debugPrint('⚠️ [RETURN] Errore notifica backend: $e');
       }

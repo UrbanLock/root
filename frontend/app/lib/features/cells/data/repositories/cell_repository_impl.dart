@@ -48,15 +48,23 @@ class CellRepositoryImpl implements CellRepository {
   }
 
   @override
-  Future<ActiveCell> requestCell(String lockerId, {String? photoBase64}) async {
+  Future<ActiveCell> requestCell(
+    String lockerId, {
+    required String type,
+    String? photoBase64,
+    Map<String, dynamic>? geolocation,
+  }) async {
     try {
       final body = <String, dynamic>{
         'lockerId': lockerId,
-        'type': 'deposited',
+        'type': type,
       };
 
       if (photoBase64 != null && photoBase64.isNotEmpty) {
         body['photo'] = photoBase64;
+      }
+      if (geolocation != null && geolocation.isNotEmpty) {
+        body['geolocalizzazione'] = geolocation;
       }
 
       final response = await _apiClient.post(
@@ -110,6 +118,26 @@ class CellRepositoryImpl implements CellRepository {
       );
     } on ApiException catch (e) {
       throw Exception('Errore nella chiusura della cella: ${e.message}');
+    }
+  }
+
+  @override
+  Future<void> returnCell(String cellId, {String? photoBase64}) async {
+    try {
+      final body = <String, dynamic>{
+        'cell_id': cellId,
+      };
+      if (photoBase64 != null && photoBase64.isNotEmpty) {
+        body['photo'] = photoBase64;
+      }
+
+      await _apiClient.post(
+        '/cells/return',
+        body: body,
+        requireAuth: true,
+      );
+    } on ApiException catch (e) {
+      throw Exception('Errore nella restituzione della cella: ${e.message}');
     }
   }
 }
