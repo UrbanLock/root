@@ -35,6 +35,7 @@ async function formatAdminDonationResponse(donazione) {
     rejectionReason: donazione.motivoRifiuto || null,
     lockerId: donazione.lockerId || null,
     cellaId: donazione.cellaId || null,
+    ritiroPressoComune: donazione.ritiroPressoComune || false,
     lockerName: null,
     lockerType: null,
     lockerPosition: null,
@@ -196,7 +197,7 @@ export async function getAllDonations(req, res, next) {
 export async function updateDonationStatus(req, res, next) {
   try {
     const { id } = req.params;
-    const { stato, motivoRifiuto, noteOperatore } = req.body;
+    const { stato, motivoRifiuto, noteOperatore, lockerId, cellaId, ritiroPressoComune } = req.body;
     const operatoreId = req.user.userId;
 
     // Log per debug
@@ -254,6 +255,27 @@ export async function updateDonationStatus(req, res, next) {
 
     if (noteOperatore !== undefined) {
       donazione.noteOperatore = noteOperatore || null;
+    }
+
+    // Se lo stato è "in_ritiro", aggiorna i campi di ritiro
+    if (statoNormalizzato === 'in_ritiro') {
+      if (ritiroPressoComune !== undefined) {
+        donazione.ritiroPressoComune = ritiroPressoComune === true || ritiroPressoComune === 'true';
+      }
+      
+      if (lockerId !== undefined) {
+        donazione.lockerId = lockerId || null;
+      }
+      
+      if (cellaId !== undefined) {
+        donazione.cellaId = cellaId || null;
+      }
+      
+      // Se ritiroPressoComune è true, assicurati che lockerId e cellaId siano null
+      if (donazione.ritiroPressoComune === true) {
+        donazione.lockerId = null;
+        donazione.cellaId = null;
+      }
     }
 
     await donazione.save();

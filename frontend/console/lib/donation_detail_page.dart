@@ -71,6 +71,9 @@ class _DonationDetailPageState extends State<DonationDetailPage> {
         donationId: _currentDonation.id,
         status: statusBackend,
         motivoRifiuto: motivoRifiuto,
+        lockerId: lockerId,
+        cellId: cellId,
+        isComunePickup: isComunePickup,
       );
 
       if (result['success'] == true) {

@@ -117,7 +117,7 @@ class _DonationsPageState extends State<DonationsPage> {
           photoUrl: data['photoUrl'] as String?,
           lockerId: data['lockerId'] as String?,
           cellId: data['cellaId'] as String?,
-          isComunePickup: false, // Il backend non ha questo campo nella risposta, ma possiamo dedurlo se lockerId è null
+          isComunePickup: data['ritiroPressoComune'] as bool? ?? false,
         );
       }).toList();
 
@@ -843,6 +843,9 @@ class _DonationsPageState extends State<DonationsPage> {
         donationId: donation.id,
         status: statusBackend,
         motivoRifiuto: motivoRifiuto, // Passa sempre motivoRifiuto, anche se null
+        lockerId: lockerId,
+        cellId: cellId,
+        isComunePickup: isComunePickup,
       );
 
       if (result['success'] == true) {

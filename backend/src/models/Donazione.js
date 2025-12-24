@@ -24,6 +24,11 @@ const donazioneSchema = new mongoose.Schema(
       default: null,
       index: true,
     },
+    ritiroPressoComune: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
     nomeOggetto: {
       type: String,
       required: false, // Non obbligatorio

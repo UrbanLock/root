@@ -81,7 +81,7 @@ class DonationService {
         };
       }
 
-      // Il controller admin accetta: stato, motivoRifiuto, noteOperatore
+      // Il controller admin accetta: stato, motivoRifiuto, noteOperatore, lockerId, cellaId, ritiroPressoComune
       final body = <String, dynamic>{
         'stato': status,
       };
@@ -95,6 +95,19 @@ class DonationService {
           };
         }
         body['motivoRifiuto'] = motivoRifiuto;
+      }
+      
+      // Se lo stato è 'in_ritiro' (accettata), invia i dati di ritiro
+      if (status == 'in_ritiro') {
+        if (isComunePickup != null) {
+          body['ritiroPressoComune'] = isComunePickup;
+        }
+        if (lockerId != null) {
+          body['lockerId'] = lockerId;
+        }
+        if (cellId != null) {
+          body['cellaId'] = cellId;
+        }
       }
 
       print('DonationService: Chiamata PUT /admin/donations/$donationId/status con body: $body');
