@@ -5,6 +5,7 @@ import 'package:console/core/theme/app_colors.dart';
 import 'package:console/features/analytics/domain/models/analytics_data.dart';
 import 'package:console/features/analytics/data/mock_analytics_data.dart';
 import 'package:console/features/lockers/domain/models/locker_type.dart';
+import 'package:console/core/api/reporting_service.dart';
 
 class AnalyticsPage extends StatefulWidget {
   final ThemeManager themeManager;
@@ -22,6 +23,331 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
   String? _selectedTimeSlot;
   String? _selectedPark;
   
+  // Dati reali dal backend
+  List<HourlyAffluence> _hourlyData = [];
+  List<CategoryAffluence> _categoryData = [];
+  List<TimeSlotCategoryData> _timeSlotData = [];
+  Map<LockerType, List<ZoneUsage>> _zoneUsageByCategory = {};
+  Map<String, List<LockerUsage>> _lockerUsageByZone = {};
+  
+  // Stato loading
+  bool _isLoading = true;
+  String? _errorMessage;
+  String _selectedPeriod = 'mese'; // 'giorno', 'settimana', 'mese', 'anno'
+  
+  @override
+  void initState() {
+    super.initState();
+    _loadAnalyticsData();
+  }
+
+  Future<void> _loadAnalyticsData() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      // Carica report utilizzo
+      final usageReport = await ReportingService.getUsageReport(periodo: _selectedPeriod);
+      
+      if (usageReport['success'] == true) {
+        final data = usageReport['data'] as Map<String, dynamic>;
+        
+        // Mappa perFasciaOraria a HourlyAffluence
+        final perFasciaOraria = data['perFasciaOraria'] as List<dynamic>? ?? [];
+        _hourlyData = _mapFasciaOrariaToHourly(perFasciaOraria);
+        
+        // Mappa perTipologia a CategoryAffluence
+        final perTipologia = data['perTipologia'] as List<dynamic>? ?? [];
+        _categoryData = _mapTipologiaToCategory(perTipologia);
+        
+        // Mappa perPostazione a ZoneUsage (raggruppato per tipo)
+        final perPostazione = data['perPostazione'] as List<dynamic>? ?? [];
+        _zoneUsageByCategory = await _mapPostazioneToZoneUsage(perPostazione, perTipologia);
+        
+        // Mappa perFasciaOraria a TimeSlotCategoryData
+        _timeSlotData = _mapFasciaOrariaToTimeSlotCategory(perFasciaOraria, perTipologia);
+        
+        // Carica parchi popolari per locker ranking
+        final popularParks = await ReportingService.getPopularParks(periodo: _selectedPeriod, limit: 50);
+        if (popularParks['success'] == true) {
+          final parksData = popularParks['data']['parks'] as List<dynamic>? ?? [];
+          _lockerUsageByZone = _mapParksToLockerUsage(parksData);
+        }
+      }
+      
+      setState(() {
+        _isLoading = false;
+      });
+    } catch (e) {
+      print('Errore durante il caricamento dei dati analytics: $e');
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'Errore durante il caricamento dei dati: ${e.toString()}';
+        // Usa dati mock come fallback
+        _hourlyData = mockHourlyAffluence;
+        _categoryData = mockCategoryAffluence;
+        _timeSlotData = mockTimeSlotCategoryData;
+        _zoneUsageByCategory = mockZoneUsageByCategory;
+        _lockerUsageByZone = mockLockerUsageByZone;
+      });
+    }
+  }
+
+  // Mappa fascia oraria backend (00-06, 06-12, ecc.) a dati orari (0-23)
+  List<HourlyAffluence> _mapFasciaOrariaToHourly(List<dynamic> perFasciaOraria) {
+    final hourlyMap = <int, int>{};
+    
+    for (var fascia in perFasciaOraria) {
+      final fasciaStr = fascia['fascia'] as String? ?? '';
+      final count = fascia['count'] as int? ?? 0;
+      
+      // Distribuisci il count tra le ore della fascia
+      List<int> hours;
+      if (fasciaStr == '00-06') {
+        hours = [0, 1, 2, 3, 4, 5];
+      } else if (fasciaStr == '06-12') {
+        hours = [6, 7, 8, 9, 10, 11];
+      } else if (fasciaStr == '12-18') {
+        hours = [12, 13, 14, 15, 16, 17];
+      } else if (fasciaStr == '18-24') {
+        hours = [18, 19, 20, 21, 22, 23];
+      } else {
+        continue;
+      }
+      
+      // Distribuisci uniformemente il count tra le ore
+      final countPerHour = (count / hours.length).ceil();
+      for (var hour in hours) {
+        hourlyMap[hour] = (hourlyMap[hour] ?? 0) + countPerHour;
+      }
+    }
+    
+    // Crea lista di HourlyAffluence per tutte le 24 ore
+    return List.generate(24, (hour) {
+      return HourlyAffluence(
+        hour: hour,
+        count: hourlyMap[hour] ?? 0,
+      );
+    });
+  }
+
+  // Mappa tipologia backend a CategoryAffluence
+  List<CategoryAffluence> _mapTipologiaToCategory(List<dynamic> perTipologia) {
+    return perTipologia.map((item) {
+      final tipologiaStr = item['tipologia'] as String? ?? 'personali';
+      final count = item['count'] as int? ?? 0;
+      
+      // Mappa stringa backend a LockerType
+      LockerType category;
+      switch (tipologiaStr) {
+        case 'sportivi':
+          category = LockerType.sportivi;
+          break;
+        case 'personali':
+          category = LockerType.personali;
+          break;
+        case 'petFriendly':
+          category = LockerType.petFriendly;
+          break;
+        case 'commerciali':
+          category = LockerType.commerciali;
+          break;
+        case 'cicloturistici':
+          category = LockerType.cicloturistici;
+          break;
+        default:
+          category = LockerType.personali;
+      }
+      
+      return CategoryAffluence(
+        category: category,
+        count: count,
+      );
+    }).toList();
+  }
+
+  // Mappa postazione a ZoneUsage raggruppato per categoria
+  Future<Map<LockerType, List<ZoneUsage>>> _mapPostazioneToZoneUsage(
+    List<dynamic> perPostazione,
+    List<dynamic> perTipologia,
+  ) async {
+    final result = <LockerType, List<ZoneUsage>>{};
+    
+    // Inizializza tutte le categorie con liste vuote
+    for (var category in LockerType.values) {
+      result[category] = [];
+    }
+    
+    // Raggruppa le postazioni per tipo locker usando perTipologia
+    // Per ogni tipo locker, crea zone basate sulle postazioni
+    for (var tipologia in perTipologia) {
+      final tipologiaStr = tipologia['tipologia'] as String? ?? 'personali';
+      
+      LockerType category;
+      switch (tipologiaStr) {
+        case 'sportivi':
+          category = LockerType.sportivi;
+          break;
+        case 'personali':
+          category = LockerType.personali;
+          break;
+        case 'petFriendly':
+          category = LockerType.petFriendly;
+          break;
+        case 'commerciali':
+          category = LockerType.commerciali;
+          break;
+        case 'cicloturistici':
+          category = LockerType.cicloturistici;
+          break;
+        default:
+          category = LockerType.personali;
+      }
+      
+      // Per ora, aggiungi tutte le postazioni a tutte le categorie
+      // In futuro si può migliorare filtrando per tipo locker specifico
+      for (var item in perPostazione) {
+        final postazioneId = item['postazione'] as String? ?? '';
+        final nome = item['nome'] as String? ?? postazioneId;
+        final count = item['count'] as int? ?? 0;
+        
+        final zone = ZoneUsage(
+          zoneId: postazioneId,
+          zoneName: nome,
+          totalUsage: count,
+        );
+        
+        result[category]!.add(zone);
+      }
+    }
+    
+    // Se non ci sono tipologie, aggiungi tutte le postazioni a personali
+    if (perTipologia.isEmpty) {
+      for (var item in perPostazione) {
+        final postazioneId = item['postazione'] as String? ?? '';
+        final nome = item['nome'] as String? ?? postazioneId;
+        final count = item['count'] as int? ?? 0;
+        
+        final zone = ZoneUsage(
+          zoneId: postazioneId,
+          zoneName: nome,
+          totalUsage: count,
+        );
+        
+        result[LockerType.personali]!.add(zone);
+      }
+    }
+    
+    return result;
+  }
+
+  // Mappa fascia oraria a TimeSlotCategoryData
+  List<TimeSlotCategoryData> _mapFasciaOrariaToTimeSlotCategory(
+    List<dynamic> perFasciaOraria,
+    List<dynamic> perTipologia,
+  ) {
+    // Per ora, crea dati semplificati
+    // In futuro si può migliorare usando i dati reali per categoria
+    return [
+      TimeSlotCategoryData(
+        timeSlot: '00:00-06:00',
+        categoryCounts: _getCategoryCountsForFascia('00-06', perFasciaOraria, perTipologia),
+      ),
+      TimeSlotCategoryData(
+        timeSlot: '06:00-12:00',
+        categoryCounts: _getCategoryCountsForFascia('06-12', perFasciaOraria, perTipologia),
+      ),
+      TimeSlotCategoryData(
+        timeSlot: '12:00-18:00',
+        categoryCounts: _getCategoryCountsForFascia('12-18', perFasciaOraria, perTipologia),
+      ),
+      TimeSlotCategoryData(
+        timeSlot: '18:00-24:00',
+        categoryCounts: _getCategoryCountsForFascia('18-24', perFasciaOraria, perTipologia),
+      ),
+    ];
+  }
+
+  Map<LockerType, int> _getCategoryCountsForFascia(
+    String fascia,
+    List<dynamic> perFasciaOraria,
+    List<dynamic> perTipologia,
+  ) {
+    // Trova il count totale per questa fascia
+    final fasciaData = perFasciaOraria.firstWhere(
+      (f) => f['fascia'] == fascia,
+      orElse: () => {'count': 0},
+    );
+    final totalCount = fasciaData['count'] as int? ?? 0;
+    
+    // Distribuisci proporzionalmente tra le categorie
+    final totalTipologia = perTipologia.fold<int>(0, (sum, t) => sum + (t['count'] as int? ?? 0));
+    
+    final result = <LockerType, int>{};
+    for (var tipologia in perTipologia) {
+      final tipologiaStr = tipologia['tipologia'] as String? ?? 'personali';
+      final tipologiaCount = tipologia['count'] as int? ?? 0;
+      
+      LockerType category;
+      switch (tipologiaStr) {
+        case 'sportivi':
+          category = LockerType.sportivi;
+          break;
+        case 'personali':
+          category = LockerType.personali;
+          break;
+        case 'petFriendly':
+          category = LockerType.petFriendly;
+          break;
+        case 'commerciali':
+          category = LockerType.commerciali;
+          break;
+        case 'cicloturistici':
+          category = LockerType.cicloturistici;
+          break;
+        default:
+          category = LockerType.personali;
+      }
+      
+      if (totalTipologia > 0) {
+        result[category] = ((tipologiaCount / totalTipologia) * totalCount).round();
+      } else {
+        result[category] = 0;
+      }
+    }
+    
+    return result;
+  }
+
+  // Mappa parchi popolari a LockerUsage
+  Map<String, List<LockerUsage>> _mapParksToLockerUsage(List<dynamic> parksData) {
+    final result = <String, List<LockerUsage>>{};
+    
+    for (var park in parksData) {
+      final lockerId = park['lockerId'] as String? ?? '';
+      final nome = park['nome'] as String? ?? lockerId;
+      final utilizzi = park['utilizzi'] as int? ?? 0;
+      
+      // Per ora, raggruppa tutti i locker in una zona generica
+      // In futuro si può migliorare usando zone reali
+      const zoneId = 'all';
+      if (!result.containsKey(zoneId)) {
+        result[zoneId] = [];
+      }
+      
+      result[zoneId]!.add(LockerUsage(
+        lockerId: lockerId,
+        lockerName: nome,
+        lockerCode: lockerId,
+        totalUsage: utilizzi,
+      ));
+    }
+    
+    return result;
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = widget.themeManager.isDarkMode;
@@ -53,19 +379,61 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
             
             // Contenuto principale
             Expanded(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  return SingleChildScrollView(
-                    padding: const EdgeInsets.all(16),
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(
-                        minHeight: constraints.maxHeight,
+              child: _isLoading
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const CupertinoActivityIndicator(radius: 16),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Caricamento dati...',
+                            style: TextStyle(
+                              color: isDark ? CupertinoColors.white : CupertinoColors.black,
+                            ),
+                          ),
+                        ],
                       ),
-                      child: _buildContent(isDark),
-                    ),
-                  );
-                },
-              ),
+                    )
+                  : _errorMessage != null
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                CupertinoIcons.exclamationmark_triangle,
+                                size: 48,
+                                color: CupertinoColors.systemRed,
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                _errorMessage!,
+                                style: TextStyle(
+                                  color: isDark ? CupertinoColors.white : CupertinoColors.black,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 16),
+                              CupertinoButton(
+                                onPressed: _loadAnalyticsData,
+                                child: const Text('Riprova'),
+                              ),
+                            ],
+                          ),
+                        )
+                      : LayoutBuilder(
+                          builder: (context, constraints) {
+                            return SingleChildScrollView(
+                              padding: const EdgeInsets.all(16),
+                              child: ConstrainedBox(
+                                constraints: BoxConstraints(
+                                  minHeight: constraints.maxHeight,
+                                ),
+                                child: _buildContent(isDark),
+                              ),
+                            );
+                          },
+                        ),
             ),
           ],
         ),
@@ -97,6 +465,37 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
               fontWeight: FontWeight.bold,
               color: isDark ? CupertinoColors.white : CupertinoColors.black,
             ),
+          ),
+          const SizedBox(height: 12),
+          // Filtro periodo
+          Row(
+            children: [
+              Text(
+                'Periodo:',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: isDark ? CupertinoColors.white : CupertinoColors.black,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: CupertinoSegmentedControl<String>(
+                  children: const {
+                    'giorno': Text('Giorno'),
+                    'settimana': Text('Settimana'),
+                    'mese': Text('Mese'),
+                    'anno': Text('Anno'),
+                  },
+                  groupValue: _selectedPeriod,
+                  onValueChanged: (value) {
+                    setState(() {
+                      _selectedPeriod = value;
+                    });
+                    _loadAnalyticsData();
+                  },
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 12),
           // Pulsante per tornare alla vista principale o alla classifica parchi
@@ -225,7 +624,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
             Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: mockTimeSlotCategoryData.map((timeSlot) {
+              children: (_timeSlotData.isEmpty ? mockTimeSlotCategoryData : _timeSlotData).map((timeSlot) {
                 final isSelected = _selectedTimeSlot == timeSlot.timeSlot;
                 return CupertinoButton(
                   padding: EdgeInsets.zero,
@@ -403,7 +802,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                     width: 0.5,
                   ),
                 ),
-                barGroups: mockHourlyAffluence.map((data) {
+                barGroups: (_hourlyData.isEmpty ? mockHourlyAffluence : _hourlyData).map((data) {
                   return BarChartGroupData(
                     x: data.hour,
                     barRods: [
@@ -431,8 +830,9 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
   Widget _buildCategoryChart(bool isDark) {
     if (_selectedCategory == null) return const SizedBox();
     
-    final categoryData = mockCategoryAffluence.firstWhere(
+    final categoryData = (_categoryData.isEmpty ? mockCategoryAffluence : _categoryData).firstWhere(
       (c) => c.category == _selectedCategory,
+      orElse: () => CategoryAffluence(category: _selectedCategory!, count: 0),
     );
     
     return Container(
@@ -500,11 +900,18 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
   Widget _buildTimeSlotChart(bool isDark) {
     if (_selectedTimeSlot == null) return const SizedBox();
     
-    final timeSlotData = mockTimeSlotCategoryData.firstWhere(
+    final timeSlotData = (_timeSlotData.isEmpty ? mockTimeSlotCategoryData : _timeSlotData).firstWhere(
       (t) => t.timeSlot == _selectedTimeSlot,
+      orElse: () => TimeSlotCategoryData(
+        timeSlot: _selectedTimeSlot!,
+        categoryCounts: {},
+      ),
     );
     
-    final maxCount = timeSlotData.categoryCounts.values.reduce((a, b) => a > b ? a : b);
+    // Calcola maxCount gestendo il caso in cui categoryCounts è vuoto
+    final maxCount = timeSlotData.categoryCounts.values.isEmpty
+        ? 10.0 // Default se non ci sono dati
+        : timeSlotData.categoryCounts.values.reduce((a, b) => a > b ? a : b);
     
     return Container(
       padding: const EdgeInsets.all(16),
@@ -649,7 +1056,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
   Widget _buildZoneRanking(bool isDark) {
     if (_selectedCategory == null) return const SizedBox();
     
-    final zones = mockZoneUsageByCategory[_selectedCategory] ?? [];
+    final zones = (_zoneUsageByCategory.isEmpty ? mockZoneUsageByCategory : _zoneUsageByCategory)[_selectedCategory] ?? [];
     final sortedZones = List<ZoneUsage>.from(zones)
       ..sort((a, b) => b.totalUsage.compareTo(a.totalUsage));
     
@@ -687,7 +1094,32 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
             ],
           ),
           const SizedBox(height: 24),
-          ...sortedZones.asMap().entries.map((entry) {
+          sortedZones.isEmpty
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          CupertinoIcons.chart_bar,
+                          size: 48,
+                          color: CupertinoColors.systemGrey,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Nessuna zona disponibile per questa categoria',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: CupertinoColors.systemGrey,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              : ...sortedZones.asMap().entries.map((entry) {
             final index = entry.key;
             final zone = entry.value;
             final isSelected = _selectedPark == zone.zoneId;
@@ -785,7 +1217,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
   Widget _buildLockerRanking(bool isDark) {
     if (_selectedPark == null || _selectedCategory == null) return const SizedBox();
     
-    final lockers = mockLockerUsageByZone[_selectedPark] ?? [];
+    final lockers = (_lockerUsageByZone.isEmpty ? mockLockerUsageByZone : _lockerUsageByZone)[_selectedPark] ?? [];
     final sortedLockers = List<LockerUsage>.from(lockers)
       ..sort((a, b) => b.totalUsage.compareTo(a.totalUsage));
     

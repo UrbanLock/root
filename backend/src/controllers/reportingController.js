@@ -219,19 +219,34 @@ export async function getUsageReport(req, res, next) {
           trendTemporale: [
             {
               $group: {
-                _id: {
-                  $dateToString: {
-                    format:
-                      periodo === 'giorno'
-                        ? '%Y-%m-%d'
-                        : periodo === 'settimana'
-                        ? '%Y-%W'
-                        : periodo === 'mese'
-                        ? '%Y-%m'
-                        : '%Y',
-                    date: '$dataInizio',
-                  },
-                },
+                _id: periodo === 'settimana'
+                  ? {
+                      // Per settimana, calcola manualmente anno-settimana
+                      $concat: [
+                        { $toString: { $year: '$dataInizio' } },
+                        '-',
+                        {
+                          $toString: {
+                            $cond: {
+                              if: { $lt: [{ $week: '$dataInizio' }, 10] },
+                              then: { $concat: ['0', { $toString: { $week: '$dataInizio' } }] },
+                              else: { $toString: { $week: '$dataInizio' } },
+                            },
+                          },
+                        },
+                      ],
+                    }
+                  : {
+                      $dateToString: {
+                        format:
+                          periodo === 'giorno'
+                            ? '%Y-%m-%d'
+                            : periodo === 'mese'
+                            ? '%Y-%m'
+                            : '%Y',
+                        date: '$dataInizio',
+                      },
+                    },
                 count: { $sum: 1 },
               },
             },
