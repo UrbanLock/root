@@ -26,7 +26,8 @@ const donazioneSchema = new mongoose.Schema(
     },
     nomeOggetto: {
       type: String,
-      required: true,
+      required: false, // Non obbligatorio
+      default: null,
       trim: true,
     },
     tipoAttrezzatura: {

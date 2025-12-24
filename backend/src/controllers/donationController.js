@@ -79,9 +79,7 @@ export async function createDonation(req, res, next) {
     const userObjectId = new mongoose.Types.ObjectId(userId);
 
     // Validazione campi obbligatori
-    if (!nomeOggetto) {
-      throw new ValidationError('nomeOggetto è obbligatorio');
-    }
+    // nomeOggetto è opzionale, non obbligatorio
     if (!tipoAttrezzatura) {
       throw new ValidationError('tipoAttrezzatura è obbligatorio');
     }

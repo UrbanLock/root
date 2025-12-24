@@ -61,12 +61,14 @@ class DonationService {
   /// [lockerId] - ID del locker (opzionale, se accettata)
   /// [cellId] - ID della cella (opzionale, se accettata)
   /// [isComunePickup] - Se il ritiro è al comune (opzionale)
+  /// [motivoRifiuto] - Motivo del rifiuto (obbligatorio se status è "rifiutato")
   static Future<Map<String, dynamic>> updateDonationStatus({
     required String donationId,
     required String status,
     String? lockerId,
     String? cellId,
     bool? isComunePickup,
+    String? motivoRifiuto,
   }) async {
     try {
       // Verifica che l'utente sia autenticato
@@ -79,13 +81,15 @@ class DonationService {
         };
       }
 
-      // Il controller admin accetta solo: stato, motivoRifiuto, noteOperatore
+      // Il controller admin accetta: stato, motivoRifiuto, noteOperatore
       final body = <String, dynamic>{
         'stato': status,
       };
       
       // Se lo stato è 'rifiutato', il backend richiede motivoRifiuto
-      // Per ora non lo gestiamo qui, ma potrebbe essere aggiunto in futuro
+      if (status == 'rifiutato' && motivoRifiuto != null && motivoRifiuto.isNotEmpty) {
+        body['motivoRifiuto'] = motivoRifiuto;
+      }
 
       print('DonationService: Chiamata PUT /admin/donations/$donationId/status con body: $body');
 

@@ -166,7 +166,6 @@ class _DonationsPageState extends State<DonationsPage> {
       filtered = filtered.where((donation) {
         if (donation.id.toLowerCase().contains(query)) return true;
         if (donation.donorName.toLowerCase().contains(query)) return true;
-        if (donation.itemName.toLowerCase().contains(query)) return true;
         if (donation.itemDescription.toLowerCase().contains(query)) return true;
         if (donation.category.label.toLowerCase().contains(query)) return true;
         return false;
@@ -281,7 +280,7 @@ class _DonationsPageState extends State<DonationsPage> {
             isDestructiveAction: true,
             onPressed: () {
               Navigator.of(context).pop();
-              _updateDonationStatus(donation, DonationStatus.rifiutata);
+              _showRejectionReasonDialog(donation);
             },
             child: const Text('Rifiuta'),
           ),
@@ -297,6 +296,96 @@ class _DonationsPageState extends State<DonationsPage> {
             child: const Text('Annulla'),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showRejectionReasonDialog(Donation donation) {
+    final TextEditingController motivoController = TextEditingController();
+    final isDark = widget.themeManager.isDarkMode;
+    
+    showCupertinoDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return CupertinoAlertDialog(
+            title: const Text('Rifiuta donazione'),
+            content: Container(
+              constraints: const BoxConstraints(
+                minHeight: 200,
+                maxHeight: 400,
+                minWidth: 300,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    height: 200,
+                    child: CupertinoTextField(
+                      controller: motivoController,
+                      placeholder: 'Motivo del rifiuto',
+                      padding: const EdgeInsets.all(12),
+                      maxLines: null,
+                      expands: true,
+                      textAlignVertical: TextAlignVertical.top,
+                      decoration: BoxDecoration(
+                        color: isDark 
+                            ? CupertinoColors.darkBackgroundGray 
+                            : CupertinoColors.white,
+                        border: Border.all(
+                          color: CupertinoColors.separator,
+                        ),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              CupertinoDialogAction(
+                isDestructiveAction: true,
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  motivoController.dispose();
+                },
+                child: const Text('Annulla'),
+              ),
+              CupertinoDialogAction(
+                isDestructiveAction: true,
+                onPressed: () {
+                  final motivo = motivoController.text.trim();
+                  if (motivo.isEmpty) {
+                    // Mostra errore se il motivo è vuoto
+                    showCupertinoDialog(
+                      context: context,
+                      builder: (context) => CupertinoAlertDialog(
+                        title: const Text('Errore'),
+                        content: const Text('Il motivo del rifiuto è obbligatorio'),
+                        actions: [
+                          CupertinoDialogAction(
+                            child: const Text('OK'),
+                            onPressed: () => Navigator.of(context).pop(),
+                          ),
+                        ],
+                      ),
+                    );
+                    return;
+                  }
+                  Navigator.of(context).pop();
+                  motivoController.dispose();
+                  _updateDonationStatus(
+                    donation, 
+                    DonationStatus.rifiutata,
+                    motivoRifiuto: motivo,
+                  );
+                },
+                child: const Text('Conferma rifiuto'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -728,6 +817,7 @@ class _DonationsPageState extends State<DonationsPage> {
     String? lockerId,
     String? cellId,
     bool? isComunePickup,
+    String? motivoRifiuto,
   }) async {
     // Mappa lo stato dal frontend al backend
     // Backend si aspetta: 'da_visionare', 'in_valutazione', 'in_ritiro', 'concluso', 'rifiutato'
@@ -754,6 +844,7 @@ class _DonationsPageState extends State<DonationsPage> {
         lockerId: lockerId,
         cellId: cellId,
         isComunePickup: isComunePickup,
+        motivoRifiuto: motivoRifiuto,
       );
 
       if (result['success'] == true) {
@@ -1143,20 +1234,6 @@ class _DonationsPageState extends State<DonationsPage> {
                 const SizedBox(width: 6),
                 Text(
                   donation.category.label,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: CupertinoColors.systemGrey,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Icon(
-                  CupertinoIcons.cube,
-                  size: 14,
-                  color: CupertinoColors.systemGrey,
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  donation.itemName,
                   style: TextStyle(
                     fontSize: 14,
                     color: CupertinoColors.systemGrey,
