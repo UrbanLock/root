@@ -37,13 +37,8 @@ class _DonationDetailPageState extends State<DonationDetailPage> {
   }
 
   void _changeDonationStatus() {
-    if (_currentDonation.status == DonationStatus.daVisionare) {
-      // Passa a "in valutazione"
-      _updateDonationStatus(DonationStatus.inValutazione);
-    } else if (_currentDonation.status == DonationStatus.inValutazione) {
-      // Mostra dialog per accettare o rifiutare
-      _showAcceptRejectDialog();
-    }
+    // Mostra direttamente il dialog per accettare o rifiutare
+    _showAcceptRejectDialog();
   }
 
   Future<void> _updateDonationStatus(
