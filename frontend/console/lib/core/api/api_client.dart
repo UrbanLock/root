@@ -4,6 +4,20 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiClient {
   static const String baseUrl = 'https://serverurbanlock.onrender.com/api/v1';
+  static const String serverBaseUrl = 'https://serverurbanlock.onrender.com';
+  
+  /// Costruisce l'URL completo per le immagini statiche (uploads)
+  static String getImageUrl(String? relativePath) {
+    if (relativePath == null || relativePath.isEmpty) {
+      return '';
+    }
+    // Se il path inizia già con http, restituiscilo così com'è
+    if (relativePath.startsWith('http://') || relativePath.startsWith('https://')) {
+      return relativePath;
+    }
+    // Altrimenti costruisci l'URL completo usando serverBaseUrl
+    return '$serverBaseUrl$relativePath';
+  }
   
   static Future<Map<String, String>> _getHeaders() async {
     final prefs = await SharedPreferences.getInstance();

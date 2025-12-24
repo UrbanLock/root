@@ -10,6 +10,7 @@ import 'package:console/features/lockers/domain/models/locker_cell.dart';
 import 'package:console/features/lockers/domain/repositories/locker_repository.dart';
 import 'package:console/features/lockers/data/repositories/locker_repository_api.dart';
 import 'package:console/core/api/donation_service.dart';
+import 'package:console/core/api/api_client.dart';
 
 class DonationDetailPage extends StatefulWidget {
   final Donation donation;
@@ -978,7 +979,7 @@ class _DonationDetailPageState extends State<DonationDetailPage> {
                       ClipRRect(
                         borderRadius: BorderRadius.circular(8),
                         child: Image.network(
-                          _currentDonation.photoUrl!,
+                          ApiClient.getImageUrl(_currentDonation.photoUrl),
                           width: double.infinity,
                           fit: BoxFit.cover,
                           errorBuilder: (context, error, stackTrace) {

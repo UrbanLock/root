@@ -27,8 +27,9 @@ const segnalazioneSchema = new mongoose.Schema(
     },
     categoria: {
       type: String,
-      required: true,
+      required: false, // Reso opzionale
       enum: ['anomalia', 'guasto', 'vandalismo', 'pulizia', 'sicurezza', 'altro'],
+      default: null,
       trim: true,
       index: true,
     },

@@ -4,6 +4,7 @@ import 'package:console/core/theme/app_colors.dart';
 import 'package:console/features/reports/domain/models/report.dart';
 import 'package:console/features/reports/data/mock_reports.dart';
 import 'package:console/features/lockers/data/mock_lockers.dart';
+import 'package:console/core/api/api_client.dart';
 
 class ReportDetailPage extends StatefulWidget {
   final Report report;
@@ -409,7 +410,7 @@ class _ReportDetailPageState extends State<ReportDetailPage> {
                       ClipRRect(
                         borderRadius: BorderRadius.circular(8),
                         child: Image.network(
-                          _currentReport.photoUrl!,
+                          ApiClient.getImageUrl(_currentReport.photoUrl),
                           width: double.infinity,
                           fit: BoxFit.cover,
                           errorBuilder: (context, error, stackTrace) {
