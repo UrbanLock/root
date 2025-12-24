@@ -56,15 +56,23 @@ class LockerRepositoryApi implements LockerRepository {
   }
 
   Locker _mapLockerFromJson(Map<String, dynamic> json) {
+    // Gestisci sia 'online' (booleano) che 'status' (stringa 'online'/'offline')
+    bool isOnline = true;
+    if (json['online'] != null) {
+      isOnline = json['online'] as bool;
+    } else if (json['status'] != null) {
+      isOnline = json['status'] == 'online';
+    }
+    
     return Locker(
       id: json['id'] as String,
-      name: json['name'] as String,
+      name: json['name'] as String? ?? json['nome'] as String? ?? '',
       code: json['id'] as String, // Usa l'id come codice
-      type: _mapLockerType(json['type'] as String),
+      type: _mapLockerType(json['type'] as String? ?? 'personali'),
       totalCells: json['totalCells'] as int? ?? 0,
       availableCells: json['availableCells'] as int? ?? 0,
       isActive: json['isActive'] as bool? ?? true,
-      isOnline: json['online'] as bool? ?? true,
+      isOnline: isOnline,
       description: json['description'] as String?,
     );
   }
@@ -235,9 +243,12 @@ class LockerRepositoryApi implements LockerRepository {
   @override
   Future<bool> updateLockerStatus(String lockerId, bool online) async {
     try {
+      // L'endpoint admin si aspetta 'stato' con valori 'online' o 'offline'
+      final stato = online ? 'online' : 'offline';
+      
       final response = await ApiClient.put(
-        '/lockers/$lockerId',
-        body: {'online': online},
+        '/admin/lockers/$lockerId/status',
+        body: {'stato': stato},
       );
       
       final data = jsonDecode(response.body);
