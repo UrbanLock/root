@@ -1,9 +1,11 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/cupertino.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:app/core/theme/theme_manager.dart';
 import 'package:app/core/styles/app_colors.dart';
 import 'package:app/core/styles/app_text_styles.dart';
+import 'package:app/core/di/app_dependencies.dart';
 
 /// Pagina per segnalare un problema con il locker o la cella
 /// 
@@ -178,45 +180,80 @@ class _ReportIssuePageState extends State<ReportIssuePage> {
       _isSubmitting = true;
     });
 
-    // ⚠️ SOLO PER TESTING: Simula invio segnalazione
-    // IN PRODUZIONE: Inviare al backend
-    // POST /api/v1/reports
-    // {
-    //   "lockerId": widget.lockerId,
-    //   "cellId": widget.cellId,
-    //   "category": _selectedCategory,
-    //   "description": _descriptionController.text,
-    //   "photo": base64(_photoFile) se presente,
-    //   "userId": currentUserId
-    // }
-    await Future.delayed(const Duration(seconds: 2));
+    try {
+      final reportRepository = AppDependencies.reportRepository;
 
-    if (mounted) {
-      setState(() {
-        _isSubmitting = false;
-      });
+      String? base64Photo;
+      if (_photoFile != null) {
+        final bytes = await _photoFile!.readAsBytes();
+        final base64Raw = base64Encode(bytes);
+        base64Photo = 'data:image/jpeg;base64,$base64Raw';
+      }
 
-      showCupertinoDialog(
-        context: context,
-        builder: (context) => CupertinoAlertDialog(
-          title: Text(widget.existingReport != null
-              ? 'Segnalazione modificata'
-              : 'Segnalazione inviata'),
-          content: Text(widget.existingReport != null
-              ? 'Le modifiche alla segnalazione sono state salvate con successo.'
-              : 'La tua segnalazione è stata inviata con successo. Ti contatteremo a breve.'),
-          actions: [
-            CupertinoDialogAction(
-              isDefaultAction: true,
-              onPressed: () {
-                Navigator.of(context).pop(); // Chiudi dialog
-                Navigator.of(context).pop(true); // Torna alla pagina precedente con risultato
-              },
-              child: const Text('OK'),
-            ),
-          ],
-        ),
-      );
+      if (widget.existingReport != null && widget.reportId != null) {
+        await reportRepository.updateReport(
+          widget.reportId!,
+          category: _selectedCategory,
+          description: _descriptionController.text.trim(),
+          base64Photo: base64Photo,
+        );
+      } else {
+        await reportRepository.createReport(
+          lockerId: widget.lockerId,
+          cellId: widget.cellId,
+          category: _selectedCategory!,
+          description: _descriptionController.text.trim(),
+          base64Photo: base64Photo,
+        );
+      }
+
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+
+        showCupertinoDialog(
+          context: context,
+          builder: (context) => CupertinoAlertDialog(
+            title: Text(widget.existingReport != null
+                ? 'Segnalazione modificata'
+                : 'Segnalazione inviata'),
+            content: Text(widget.existingReport != null
+                ? 'Le modifiche alla segnalazione sono state salvate con successo.'
+                : 'La tua segnalazione è stata inviata con successo. Ti contatteremo a breve.'),
+            actions: [
+              CupertinoDialogAction(
+                isDefaultAction: true,
+                onPressed: () {
+                  Navigator.of(context).pop(); // Chiudi dialog
+                  Navigator.of(context).pop(true); // Torna alla pagina precedente con risultato
+                },
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+        showCupertinoDialog(
+          context: context,
+          builder: (context) => CupertinoAlertDialog(
+            title: const Text('Errore'),
+            content: Text('Errore nell\'invio della segnalazione: $e'),
+            actions: [
+              CupertinoDialogAction(
+                isDefaultAction: true,
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      }
     }
   }
 

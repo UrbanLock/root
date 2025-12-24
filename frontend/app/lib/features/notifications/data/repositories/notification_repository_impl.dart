@@ -1,106 +1,160 @@
+import 'package:app/core/api/api_client.dart';
+import 'package:app/core/api/api_exception.dart';
+import 'package:app/core/config/api_config.dart';
 import 'package:app/features/notifications/domain/models/app_notification.dart';
 import 'package:app/features/notifications/data/repositories/notification_repository.dart';
 
-/// Implementazione mock del repository notifiche
-/// 
-/// **TODO quando il backend sarà pronto:**
-/// - Implementare chiamate HTTP reali
-/// - Sincronizzare con il server
-/// - Usare database locale per cache
+/// Repository notifiche.
+///
+/// - Se è presente un [ApiClient], legge/sincronizza con il backend.
+/// - Mantiene comunque una lista locale di notifiche generate dall'app
+///   (promemoria, eventi locali) che non esistono sul backend.
 class NotificationRepositoryImpl implements NotificationRepository {
-  // Singleton pattern per condividere la stessa lista tra tutte le istanze
-  static final NotificationRepositoryImpl _instance = NotificationRepositoryImpl._internal();
-  factory NotificationRepositoryImpl() => _instance;
-  NotificationRepositoryImpl._internal();
+  final ApiClient? _apiClient;
 
-  // Mock: lista notifiche in memoria
-  // In produzione, questo verrà da un database locale o dal backend
-  final List<AppNotification> _notifications = [];
+  NotificationRepositoryImpl({ApiClient? apiClient}) : _apiClient = apiClient;
+
+  // Notifiche locali in memoria (create dall'app)
+  final List<AppNotification> _localNotifications = [];
 
   @override
   Future<List<AppNotification>> getNotifications() async {
-    // TODO: Quando il backend sarà pronto:
-    // final response = await apiClient.get(ApiConfig.notificationsEndpoint);
-    // return (response['notifications'] as List)
-    //     .map((json) => AppNotification.fromJson(json))
-    //     .toList();
-    
-    // Ordina per timestamp (più recenti prima)
-    _notifications.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-    return List.from(_notifications);
+    List<AppNotification> remote = [];
+
+    if (_apiClient != null) {
+      try {
+        final response = await _apiClient!.get(
+          ApiConfig.notificationsEndpoint,
+          requireAuth: true,
+        );
+        final items = response['items'] as List<dynamic>? ?? [];
+        remote = items
+            .map((e) => AppNotification.fromJson(e as Map<String, dynamic>))
+            .toList();
+      } on ApiException catch (_) {
+        // In caso di errore backend, mostra comunque le notifiche locali
+      }
+    }
+
+    final all = [...remote, ..._localNotifications];
+    all.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+    return all;
   }
 
   @override
   Future<List<AppNotification>> getUnreadNotifications() async {
-    return _notifications.where((n) => !n.isRead).toList();
+    final all = await getNotifications();
+    return all.where((n) => !n.isRead).toList();
   }
 
   @override
   Future<void> addNotification(AppNotification notification) async {
-    // TODO: Quando il backend sarà pronto:
-    // await apiClient.post(ApiConfig.notificationsEndpoint, notification.toJson());
-    
-    _notifications.add(notification);
+    // Notifiche generate dall'app restano solo in locale
+    _localNotifications.add(notification);
   }
 
   @override
   Future<void> markAsRead(String notificationId) async {
-    // TODO: Quando il backend sarà pronto:
-    // await apiClient.put('${ApiConfig.notificationsEndpoint}/$notificationId/read', {});
-    
-    final index = _notifications.indexWhere((n) => n.id == notificationId);
-    if (index != -1) {
-      _notifications[index] = AppNotification(
-        id: _notifications[index].id,
-        title: _notifications[index].title,
-        body: _notifications[index].body,
-        timestamp: _notifications[index].timestamp,
-        type: _notifications[index].type,
-        isRead: true,
-        payload: _notifications[index].payload,
-      );
+    if (_apiClient != null) {
+      try {
+        await _apiClient!.put(
+          '${ApiConfig.notificationsEndpoint}/$notificationId/read',
+          requireAuth: true,
+        );
+      } on ApiException catch (_) {
+        // In caso di errore, continuiamo comunque ad aggiornare lato client
+      }
     }
-  }
 
-  @override
-  Future<void> markAllAsRead() async {
-    // TODO: Quando il backend sarà pronto:
-    // await apiClient.put('${ApiConfig.notificationsEndpoint}/read-all', {});
-    
-    for (int i = 0; i < _notifications.length; i++) {
-      if (!_notifications[i].isRead) {
-        _notifications[i] = AppNotification(
-          id: _notifications[i].id,
-          title: _notifications[i].title,
-          body: _notifications[i].body,
-          timestamp: _notifications[i].timestamp,
-          type: _notifications[i].type,
+    for (var i = 0; i < _localNotifications.length; i++) {
+      if (_localNotifications[i].id == notificationId) {
+        final n = _localNotifications[i];
+        _localNotifications[i] = AppNotification(
+          id: n.id,
+          title: n.title,
+          body: n.body,
+          timestamp: n.timestamp,
+          type: n.type,
           isRead: true,
-          payload: _notifications[i].payload,
+          payload: n.payload,
         );
       }
     }
   }
 
   @override
+  Future<void> markAllAsRead() async {
+    if (_apiClient != null) {
+      try {
+        final all = await getNotifications();
+        for (final n in all.where((n) => !n.isRead)) {
+          await markAsRead(n.id);
+        }
+      } catch (_) {
+        // Ignora errori backend
+      }
+    } else {
+      for (int i = 0; i < _localNotifications.length; i++) {
+        if (!_localNotifications[i].isRead) {
+          final n = _localNotifications[i];
+          _localNotifications[i] = AppNotification(
+            id: n.id,
+            title: n.id,
+            body: n.body,
+            timestamp: n.timestamp,
+            type: n.type,
+            isRead: true,
+            payload: n.payload,
+          );
+        }
+      }
+    }
+  }
+
+  @override
   Future<void> deleteNotification(String notificationId) async {
-    // TODO: Quando il backend sarà pronto:
-    // await apiClient.delete('${ApiConfig.notificationsEndpoint}/$notificationId');
-    
-    _notifications.removeWhere((n) => n.id == notificationId);
+    if (_apiClient != null) {
+      try {
+        await _apiClient!.delete(
+          '${ApiConfig.notificationsEndpoint}/$notificationId',
+          requireAuth: true,
+        );
+      } on ApiException catch (_) {
+        // Ignora errori backend
+      }
+    }
+
+    _localNotifications.removeWhere((n) => n.id == notificationId);
   }
 
   @override
   Future<void> deleteAllNotifications() async {
-    // TODO: Quando il backend sarà pronto:
-    // await apiClient.delete('${ApiConfig.notificationsEndpoint}');
-    
-    _notifications.clear();
+    if (_apiClient != null) {
+      try {
+        final all = await getNotifications();
+        for (final n in all) {
+          await deleteNotification(n.id);
+        }
+      } catch (_) {
+        // Ignora errori backend
+      }
+    }
+
+    _localNotifications.clear();
   }
 
   @override
   Future<int> getUnreadCount() async {
-    return _notifications.where((n) => !n.isRead).length;
+    if (_apiClient != null) {
+      try {
+        final unread = await getUnreadNotifications();
+        return unread.length;
+      } catch (_) {
+        // In caso di errore, fallback su conteggio locale
+      }
+    }
+    return _localNotifications.where((n) => !n.isRead).length;
   }
 }
+
 

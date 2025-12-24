@@ -5,9 +5,16 @@ import 'package:app/features/auth/data/repositories/auth_repository.dart';
 import 'package:app/features/auth/data/repositories/auth_repository_impl.dart';
 import 'package:app/features/cells/domain/repositories/cell_repository.dart';
 import 'package:app/features/cells/data/repositories/cell_repository_mock.dart';
+import 'package:app/features/cells/data/repositories/cell_repository_impl.dart';
 import 'package:app/features/lockers/data/repositories/locker_repository_impl.dart';
 import 'package:app/features/lockers/data/repositories/locker_repository_mock.dart';
 import 'package:app/features/lockers/domain/repositories/locker_repository.dart';
+import 'package:app/features/notifications/data/repositories/notification_repository.dart';
+import 'package:app/features/notifications/data/repositories/notification_repository_impl.dart';
+import 'package:app/features/profile/data/repositories/donation_repository.dart';
+import 'package:app/features/profile/data/repositories/donation_repository_impl.dart';
+import 'package:app/features/reports/data/repositories/report_repository.dart';
+import 'package:app/features/reports/data/repositories/report_repository_impl.dart';
 
 /// Dependency Injection per l'app
 /// 
@@ -19,18 +26,36 @@ class AppDependencies {
   static ApiClient? _apiClient;
   static AuthService? _authService;
   static AuthRepository? _authRepository;
+  static DonationRepository? _donationRepository;
+  static NotificationRepository? _notificationRepository;
+  static ReportRepository? _reportRepository;
 
   /// Inizializza le dipendenze (chiamare all'avvio dell'app)
   static Future<void> initialize() async {
-    if (!useMockData) {
-      _authService = await AuthService.getInstance();
-      _apiClient = ApiClient(
-        baseUrl: ApiConfig.baseUrl,
-        timeout: ApiConfig.timeout,
-        authService: _authService!,
-      );
-      _authRepository = AuthRepositoryImpl(apiClient: _apiClient!);
-    }
+    if (_apiClient != null || useMockData) return;
+
+    // Inizializza AuthService (singleton basato su SharedPreferences)
+    _authService = await AuthService.getInstance();
+
+    // Crea ApiClient condiviso
+    _apiClient = ApiClient(
+      baseUrl: ApiConfig.baseUrl,
+      timeout: ApiConfig.timeout,
+      authService: _authService!,
+    );
+
+    // Repository autenticazione
+    _authRepository = AuthRepositoryImpl(apiClient: _apiClient!);
+
+    // Repository donazioni
+    _donationRepository = DonationRepositoryImpl(apiClient: _apiClient!);
+
+    // Repository notifiche (sincronizza con backend quando possibile)
+    _notificationRepository =
+        NotificationRepositoryImpl(apiClient: _apiClient);
+
+    // Repository segnalazioni
+    _reportRepository = ReportRepositoryImpl(apiClient: _apiClient!);
   }
 
   /// Repository per i lockers
@@ -75,13 +100,47 @@ class AppDependencies {
   /// 
   /// **Nota**: Il repository mock è un singleton per mantenere i dati in memoria
   static CellRepository? get cellRepository {
-    if (useMockData) {
-      return CellRepositoryMock(); // Singleton, mantiene i dati tra le chiamate
-    } else {
-      // Il backend live attualmente non espone endpoint per "active cells"/storico/apertura.
-      // Manteniamo quindi il mock *solo* per queste feature, evitando null crash nelle pagine.
-      return CellRepositoryMock();
+    if (useMockData || _apiClient == null) {
+      return CellRepositoryMock(); // fallback mock
     }
+    return CellRepositoryImpl(apiClient: _apiClient!);
+  }
+
+  /// Repository donazioni
+  static DonationRepository get donationRepository {
+    if (_donationRepository != null) return _donationRepository!;
+    if (_apiClient == null) {
+      throw StateError(
+        'AppDependencies non inizializzato: chiama initialize() in main()',
+      );
+    }
+    _donationRepository = DonationRepositoryImpl(apiClient: _apiClient!);
+    return _donationRepository!;
+  }
+
+  /// Repository notifiche
+  static NotificationRepository get notificationRepository {
+    if (_notificationRepository != null) return _notificationRepository!;
+    if (_apiClient == null) {
+      throw StateError(
+        'AppDependencies non inizializzato: chiama initialize() in main()',
+      );
+    }
+    _notificationRepository =
+        NotificationRepositoryImpl(apiClient: _apiClient);
+    return _notificationRepository!;
+  }
+
+  /// Repository segnalazioni
+  static ReportRepository get reportRepository {
+    if (_reportRepository != null) return _reportRepository!;
+    if (_apiClient == null) {
+      throw StateError(
+        'AppDependencies non inizializzato: chiama initialize() in main()',
+      );
+    }
+    _reportRepository = ReportRepositoryImpl(apiClient: _apiClient!);
+    return _reportRepository!;
   }
 }
 

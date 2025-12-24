@@ -84,6 +84,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
       vsync: this,
       duration: const Duration(milliseconds: 800),
     );
+    _initializeAuthState();
     _loadLockers();
     _requestLocationPermissionAndZoom();
     _loadUnreadNotificationsCount();
@@ -128,6 +129,38 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
     // TODO: Quando il backend sarà pronto, caricare celle attive dal repository
     // Per ora, questa funzione è un placeholder
     // In produzione, verificheremo se ci sono celle aperte e notificheremo l'utente
+  }
+
+  /// Inizializza lo stato di autenticazione e i dati utente
+  Future<void> _initializeAuthState() async {
+    final authService = AppDependencies.authService;
+    final authRepository = AppDependencies.authRepository;
+
+    final isAuth = authService?.isAuthenticated() ?? false;
+
+    if (isAuth && authRepository != null) {
+      try {
+        final user = await authRepository.getMe();
+        if (!mounted) return;
+        setState(() {
+          _isAuthenticated = true;
+          _userName = user.nomeCompleto;
+          _userEmail = user.email;
+        });
+      } catch (_) {
+        if (!mounted) return;
+        setState(() {
+          _isAuthenticated = true;
+        });
+      }
+    } else {
+      if (!mounted) return;
+      setState(() {
+        _isAuthenticated = false;
+        _userName = null;
+        _userEmail = null;
+      });
+    }
   }
   
   // Metodo helper per animare lo zoom
@@ -596,13 +629,15 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
                               CupertinoPageRoute(
                                 builder: (context) => LoginPage(
                                   themeManager: widget.themeManager,
-                                  onLoginSuccess: (success) {
-                                  setState(() {
-                                    _isAuthenticated = success;
-                                  });
-                                },
+                                  onLoginSuccess: (success) async {
+                                    if (!mounted) return;
+                                    if (success) {
+                                      await _initializeAuthState();
+                                      await _loadUnreadNotificationsCount();
+                                    }
+                                  },
+                                ),
                               ),
-                            ),
                             );
                           },
                           child: const Text(
@@ -1062,35 +1097,49 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
                     isAuthenticated: _isAuthenticated,
                     userName: _userName,
                     onLoginTap: () {
-                    setState(() {
-                      _showProfilePopup = false;
-                    });
-                    Navigator.of(context).push(
-                      CupertinoPageRoute(
-                        builder: (context) => LoginPage(
-                          themeManager: widget.themeManager,
-                          onLoginSuccess: (success) {
-                            setState(() {
-                              _isAuthenticated = success;
+                      setState(() {
+                        _showProfilePopup = false;
+                      });
+                      Navigator.of(context).push(
+                        CupertinoPageRoute(
+                          builder: (context) => LoginPage(
+                            themeManager: widget.themeManager,
+                            onLoginSuccess: (success) async {
+                              if (!mounted) return;
                               if (success) {
-                                // Mock: imposta dati utente dopo login
-                                _userName = 'Mario Rossi';
-                                _userEmail = 'mario.rossi@example.com';
+                                await _initializeAuthState();
+                                await _loadUnreadNotificationsCount();
                               }
-                            });
-                          },
+                            },
+                          ),
                         ),
-                      ),
-                    );
-                  },
-                  onLogoutTap: () {
-                    setState(() {
-                      _isAuthenticated = false;
-                      _showProfilePopup = false;
-                      _userName = null;
-                      _userEmail = null;
-                    });
-                  },
+                      );
+                    },
+                    onLogoutTap: () async {
+                      final authRepository = AppDependencies.authRepository;
+                      final authService = AppDependencies.authService;
+
+                      if (authRepository != null) {
+                        try {
+                          await authRepository.logout();
+                        } catch (_) {
+                          // Ignora errori di logout (token scaduto, ecc.)
+                        }
+                      }
+
+                      if (authService != null) {
+                        await authService.clearTokens();
+                      }
+
+                      if (!mounted) return;
+                      setState(() {
+                        _isAuthenticated = false;
+                        _showProfilePopup = false;
+                        _userName = null;
+                        _userEmail = null;
+                      });
+                      await _loadUnreadNotificationsCount();
+                    },
                   onHistoryTap: () {
                     setState(() {
                       _showProfilePopup = false;

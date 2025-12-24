@@ -4,6 +4,8 @@ import 'package:app/core/styles/app_colors.dart';
 import 'package:app/core/styles/app_text_styles.dart';
 import 'package:app/features/profile/presentation/pages/donate_form_page.dart';
 import 'package:app/features/profile/presentation/pages/donation_detail_page.dart';
+import 'package:app/core/di/app_dependencies.dart';
+import 'package:app/features/profile/domain/models/donation.dart';
 
 /// Pagina che mostra lo storico delle donazioni e permette di effettuare una nuova donazione
 /// 
@@ -31,72 +33,55 @@ class DonatePage extends StatefulWidget {
 }
 
 class _DonatePageState extends State<DonatePage> {
-  // ⚠️ SOLO PER TESTING: Dati mock
-  // IN PRODUZIONE: Caricare dal backend
-  List<Map<String, dynamic>> _donations = [
-    {
-      'id': '1',
-      'itemName': 'Bicicletta da città',
-      'category': 'Sport',
-      'description': 'Bicicletta in ottime condizioni, usata poco. Include luci e campanello.',
-      'date': DateTime.now().subtract(const Duration(days: 3)),
-      'status': 'confermata',
-      'hasPhoto': true,
-      'rejectionReason': null,
-    },
-    {
-      'id': '2',
-      'itemName': 'Libri di narrativa',
-      'category': 'Libri',
-      'description': 'Collezione di libri di narrativa italiana contemporanea.',
-      'date': DateTime.now().subtract(const Duration(days: 10)),
-      'status': 'in_attesa',
-      'hasPhoto': true,
-      'rejectionReason': null,
-    },
-    {
-      'id': '3',
-      'itemName': 'Gioco da tavolo',
-      'category': 'Giochi',
-      'description': 'Gioco da tavolo completo, tutte le pedine presenti.',
-      'date': DateTime.now().subtract(const Duration(days: 15)),
-      'status': 'rifiutata',
-      'hasPhoto': false,
-      'rejectionReason': 'L\'oggetto non rispetta i criteri di qualità richiesti per le donazioni.',
-    },
-    {
-      'id': '4',
-      'itemName': 'Vestiti usati',
-      'category': 'Altro',
-      'description': 'Vestiti in buone condizioni.',
-      'date': DateTime.now().subtract(const Duration(days: 20)),
-      'status': 'rifiutata',
-      'hasPhoto': true,
-      'rejectionReason': null, // Nessun motivo specifico
-    },
-    {
-      'id': '5',
-      'itemName': 'Set di pentole',
-      'category': 'Altro',
-      'description': 'Set completo di pentole in acciaio inox.',
-      'date': DateTime.now().subtract(const Duration(days: 5)),
-      'status': 'consegnata',
-      'hasPhoto': true,
-      'rejectionReason': null,
-    },
-  ];
-
+  List<Donation> _donations = [];
   bool _isLoading = false;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDonations();
+  }
+
+  Future<void> _loadDonations() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final repo = AppDependencies.donationRepository;
+      final items = await repo.getDonations();
+      if (!mounted) return;
+      setState(() {
+        _donations = items;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage =
+            'Errore nel caricamento delle donazioni: $e';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
 
   String _getStatusLabel(String status) {
     switch (status) {
-      case 'in_attesa':
+      case 'da_visionare':
         return 'In attesa di verifica';
-      case 'confermata':
-        return 'Confermata';
-      case 'consegnata':
-        return 'Consegnata';
-      case 'rifiutata':
+      case 'in_valutazione':
+        return 'In valutazione';
+      case 'in_ritiro':
+        return 'Ritiro programmato';
+      case 'concluso':
+        return 'Completata';
+      case 'rifiutato':
         return 'Rifiutata';
       default:
         return 'Sconosciuto';
@@ -105,13 +90,13 @@ class _DonatePageState extends State<DonatePage> {
 
   Color _getStatusColor(String status, bool isDark) {
     switch (status) {
-      case 'in_attesa':
+      case 'da_visionare':
+      case 'in_valutazione':
+      case 'in_ritiro':
         return AppColors.primary(isDark);
-      case 'confermata':
+      case 'concluso':
         return CupertinoColors.systemGreen;
-      case 'consegnata':
-        return CupertinoColors.systemPurple;
-      case 'rifiutata':
+      case 'rifiutato':
         return CupertinoColors.systemRed;
       default:
         return AppColors.textSecondary(isDark);
@@ -142,25 +127,8 @@ class _DonatePageState extends State<DonatePage> {
       ),
     );
 
-    // Se la donazione è stata inviata con successo, aggiungi alla lista
     if (result == true) {
-      // ⚠️ SOLO PER TESTING: Aggiungi una donazione mock
-      // IN PRODUZIONE: Ricarica dal backend
-      setState(() {
-        _donations.insert(
-          0,
-          {
-            'id': DateTime.now().millisecondsSinceEpoch.toString(),
-            'itemName': 'Nuovo oggetto donato',
-            'category': 'Altro',
-            'description': 'Nuova donazione effettuata',
-            'date': DateTime.now(),
-            'status': 'in_attesa',
-            'hasPhoto': true,
-            'rejectionReason': null,
-          },
-        );
-      });
+      await _loadDonations();
     }
   }
 
@@ -183,7 +151,18 @@ class _DonatePageState extends State<DonatePage> {
           child: SafeArea(
             child: _isLoading
                 ? const Center(child: CupertinoActivityIndicator())
-                : _donations.isEmpty
+                : _errorMessage != null
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Text(
+                            _errorMessage!,
+                            style: AppTextStyles.body(isDark),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      )
+                    : _donations.isEmpty
                     ? Column(
                         children: [
                           Expanded(
@@ -251,9 +230,7 @@ class _DonatePageState extends State<DonatePage> {
                               child: CustomScrollView(
                                 slivers: [
                                   CupertinoSliverRefreshControl(
-                                    onRefresh: () async {
-                                      // TODO: Ricarica donazioni
-                                    },
+                                    onRefresh: _loadDonations,
                                   ),
                                   SliverPadding(
                                     padding: const EdgeInsets.all(20),
@@ -344,12 +321,12 @@ class _DonatePageState extends State<DonatePage> {
   Widget _buildDonationCard({
     required BuildContext context,
     required bool isDark,
-    required Map<String, dynamic> donation,
+    required Donation donation,
   }) {
-    final itemName = donation['itemName'] as String;
-    final category = donation['category'] as String;
-    final date = donation['date'] as DateTime;
-    final status = donation['status'] as String;
+    final itemName = donation.itemName;
+    final category = donation.category ?? 'Altro';
+    final date = donation.createdAt;
+    final status = donation.status;
     final statusLabel = _getStatusLabel(status);
     final statusColor = _getStatusColor(status, isDark);
 
@@ -360,7 +337,16 @@ class _DonatePageState extends State<DonatePage> {
           CupertinoPageRoute(
             builder: (context) => DonationDetailPage(
               themeManager: widget.themeManager,
-              donation: donation,
+              donation: {
+                'id': donation.id,
+                'itemName': donation.itemName,
+                'category': category,
+                'description': donation.description,
+                'date': donation.createdAt,
+                'status': donation.status,
+                'hasPhoto': donation.photoUrl != null,
+                'rejectionReason': donation.rejectionReason,
+              },
             ),
           ),
         );

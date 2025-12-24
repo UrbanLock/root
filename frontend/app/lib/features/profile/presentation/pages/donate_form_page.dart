@@ -1,9 +1,11 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/cupertino.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:app/core/theme/theme_manager.dart';
 import 'package:app/core/styles/app_colors.dart';
 import 'package:app/core/styles/app_text_styles.dart';
+import 'package:app/core/di/app_dependencies.dart';
 
 /// Pagina per compilare il form di donazione
 class DonateFormPage extends StatefulWidget {
@@ -37,7 +39,9 @@ class _DonateFormPageState extends State<DonateFormPage> {
     try {
       final XFile? image = await _imagePicker.pickImage(
         source: ImageSource.camera,
-        imageQuality: 85,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 75,
       );
       if (image != null) {
         setState(() {
@@ -64,7 +68,7 @@ class _DonateFormPageState extends State<DonateFormPage> {
     }
   }
 
-  void _submitDonation() {
+  Future<void> _submitDonation() async {
     // Validazione: foto obbligatoria
     if (_selectedImage == null) {
       showCupertinoDialog(
@@ -109,33 +113,66 @@ class _DonateFormPageState extends State<DonateFormPage> {
       _isSubmitting = true;
     });
 
-    // Simula invio (TODO: implementare chiamata API)
-    Future.delayed(const Duration(seconds: 1), () {
-      if (mounted) {
-        setState(() {
-          _isSubmitting = false;
-        });
-        showCupertinoDialog(
-          context: context,
-          builder: (context) => CupertinoAlertDialog(
-            title: const Text('Donazione inviata'),
-            content: const Text(
-              'La tua donazione è stata registrata. Verrà esaminata e pubblicata a breve.',
-            ),
-            actions: [
-              CupertinoDialogAction(
-                isDefaultAction: true,
-                child: const Text('OK'),
-                onPressed: () {
-                  Navigator.of(context).pop(); // Chiudi dialog
-                  Navigator.of(context).pop(true); // Torna indietro con risultato
-                },
-              ),
-            ],
+    try {
+      final repo = AppDependencies.donationRepository;
+
+      // Converte la foto in base64 con header data URL
+      final bytes = await _selectedImage!.readAsBytes();
+      final base64Raw = base64Encode(bytes);
+      final base64Photo = 'data:image/jpeg;base64,$base64Raw';
+
+      await repo.createDonation(
+        itemName: _itemController.text.trim(),
+        equipmentType: (_selectedCategory ?? 'altro').toLowerCase(),
+        category: _selectedCategory,
+        description: _descriptionController.text.trim(),
+        base64Photo: base64Photo,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _isSubmitting = false;
+      });
+
+      showCupertinoDialog(
+        context: context,
+        builder: (context) => CupertinoAlertDialog(
+          title: const Text('Donazione inviata'),
+          content: const Text(
+            'La tua donazione è stata registrata. Verrà esaminata e pubblicata a breve.',
           ),
-        );
-      }
-    });
+          actions: [
+            CupertinoDialogAction(
+              isDefaultAction: true,
+              child: const Text('OK'),
+              onPressed: () {
+                Navigator.of(context).pop(); // Chiudi dialog
+                Navigator.of(context).pop(true); // Torna indietro con risultato
+              },
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isSubmitting = false;
+      });
+      showCupertinoDialog(
+        context: context,
+        builder: (context) => CupertinoAlertDialog(
+          title: const Text('Errore'),
+          content: Text('Errore nell\'invio della donazione: $e'),
+          actions: [
+            CupertinoDialogAction(
+              isDefaultAction: true,
+              child: const Text('OK'),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+          ],
+        ),
+      );
+    }
   }
 
   @override

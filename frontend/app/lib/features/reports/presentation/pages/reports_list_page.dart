@@ -4,6 +4,8 @@ import 'package:app/core/styles/app_colors.dart';
 import 'package:app/core/styles/app_text_styles.dart';
 import 'package:app/features/reports/presentation/pages/report_issue_page.dart';
 import 'package:app/features/reports/presentation/pages/report_detail_page.dart';
+import 'package:app/core/di/app_dependencies.dart';
+import 'package:app/features/reports/domain/models/report.dart';
 
 /// Pagina che mostra la lista delle segnalazioni inviate dall'utente
 /// 
@@ -32,39 +34,39 @@ class ReportsListPage extends StatefulWidget {
 }
 
 class _ReportsListPageState extends State<ReportsListPage> {
-  // ⚠️ SOLO PER TESTING: Dati mock
-  // IN PRODUZIONE: Caricare dal backend
-  List<Map<String, dynamic>> _reports = [
-    {
-      'id': '1',
-      'lockerName': 'Locker Centrale',
-      'cellNumber': 'A-12',
-      'category': 'Cella non si apre',
-      'description': 'La cella non si apre quando premo il pulsante. Ho provato più volte ma non funziona.',
-      'date': DateTime.now().subtract(const Duration(days: 2)),
-      'hasPhoto': true,
-    },
-    {
-      'id': '2',
-      'lockerName': 'Locker Università',
-      'cellNumber': 'B-05',
-      'category': 'Cella danneggiata',
-      'description': 'La porta della cella è danneggiata e non si chiude correttamente.',
-      'date': DateTime.now().subtract(const Duration(days: 5)),
-      'hasPhoto': false,
-    },
-    {
-      'id': '3',
-      'lockerName': 'Locker Stazione',
-      'cellNumber': null,
-      'category': 'Problema connessione Bluetooth',
-      'description': 'Non riesco a connettermi al locker tramite Bluetooth. Il dispositivo non viene rilevato.',
-      'date': DateTime.now().subtract(const Duration(days: 7)),
-      'hasPhoto': false,
-    },
-  ];
+  List<Report> _reports = [];
+  bool _isLoading = true;
+  String? _errorMessage;
 
-  bool _isLoading = false;
+  @override
+  void initState() {
+    super.initState();
+    _loadReports();
+  }
+
+  Future<void> _loadReports() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final reportRepository = AppDependencies.reportRepository;
+      final fetchedReports = await reportRepository.getReports();
+      if (!mounted) return;
+      setState(() {
+        _reports = fetchedReports;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage =
+            'Errore nel caricamento delle segnalazioni: $e';
+        _isLoading = false;
+      });
+    }
+  }
 
   String _formatDate(DateTime date) {
     final now = DateTime.now();
@@ -97,41 +99,18 @@ class _ReportsListPageState extends State<ReportsListPage> {
       ),
     );
 
-    // Se la segnalazione è stata inviata con successo, aggiungi alla lista
     if (result == true) {
-      // ⚠️ SOLO PER TESTING: Aggiungi una segnalazione mock
-      // IN PRODUZIONE: Ricarica dal backend
-      setState(() {
-        _reports.insert(
-          0,
-          {
-            'id': DateTime.now().millisecondsSinceEpoch.toString(),
-            'lockerName': 'Locker Generale',
-            'cellNumber': null,
-            'category': 'Altro',
-            'description': 'Nuova segnalazione inviata',
-            'date': DateTime.now(),
-            'hasPhoto': false,
-          },
-        );
-      });
+      await _loadReports();
     }
   }
 
-  void _refreshReports() {
-    // ⚠️ SOLO PER TESTING: Ricarica la lista
-    // IN PRODUZIONE: Ricarica dal backend (GET /api/v1/reports)
-    setState(() {
-      // La lista viene aggiornata automaticamente quando si modifica un report
-      // In produzione, qui si farebbe una chiamata API per ricaricare i dati
-    });
+  void _refreshReports() async {
+    await _loadReports();
   }
 
   void _deleteReport(String reportId) {
-    // ⚠️ SOLO PER TESTING: Rimuovi la segnalazione dalla lista locale
-    // IN PRODUZIONE: Cancella dal backend (DELETE /api/v1/reports/{id})
-    setState(() {
-      _reports.removeWhere((r) => r['id'] == reportId);
+    AppDependencies.reportRepository.deleteReport(reportId).then((_) {
+      _loadReports();
     });
   }
 
@@ -158,7 +137,34 @@ class _ReportsListPageState extends State<ReportsListPage> {
                 ? const Center(
                     child: CupertinoActivityIndicator(radius: 20),
                   )
-                : _reports.isEmpty
+                : _errorMessage != null
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                CupertinoIcons.exclamationmark_triangle,
+                                size: 48,
+                                color: AppColors.textSecondary(isDark),
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                _errorMessage!,
+                                style: AppTextStyles.body(isDark),
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 24),
+                              CupertinoButton.filled(
+                                onPressed: _loadReports,
+                                child: const Text('Riprova'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    : _reports.isEmpty
                     ? Column(
                         children: [
                           Expanded(
@@ -288,13 +294,13 @@ class _ReportsListPageState extends State<ReportsListPage> {
     );
   }
 
-  Widget _buildReportCard(Map<String, dynamic> report, bool isDark) {
-    final category = report['category'] as String;
-    final description = report['description'] as String;
-    final date = report['date'] as DateTime;
-    final lockerName = report['lockerName'] as String;
-    final cellNumber = report['cellNumber'] as String?;
-    final hasPhoto = report['hasPhoto'] as bool;
+  Widget _buildReportCard(Report report, bool isDark) {
+    final category = report.category;
+    final description = report.description;
+    final date = report.createdAt;
+    final lockerName = report.lockerName ?? 'N/A';
+    final cellNumber = report.cellaId;
+    final hasPhoto = report.photoUrl != null;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -312,9 +318,9 @@ class _ReportsListPageState extends State<ReportsListPage> {
             CupertinoPageRoute(
               builder: (context) => ReportDetailPage(
                 themeManager: widget.themeManager,
-                report: report,
+                reportId: report.id,
                 onReportDeleted: () {
-                  _deleteReport(report['id'] as String);
+                  _deleteReport(report.id);
                 },
                 onReportUpdated: () {
                   _refreshReports();
