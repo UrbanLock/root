@@ -1,6 +1,7 @@
 import express from 'express';
 import { body, validationResult } from 'express-validator';
 import { login, refreshToken, getMe, logout } from '../controllers/authController.js';
+import { operatorLogin } from '../controllers/operatorAuthController.js';
 import { authenticate } from '../middleware/auth.js';
 import { ValidationError } from '../middleware/errorHandler.js';
 
@@ -18,6 +19,35 @@ const validate = (req, res, next) => {
   }
   next();
 };
+
+/**
+ * POST /api/v1/auth/operator/login
+ * Login operatore (username/password)
+ * 
+ * Questa route deve essere definita PRIMA di /login per evitare conflitti
+ */
+router.post(
+  '/operator/login',
+  [
+    body('username')
+      .notEmpty()
+      .withMessage('Username richiesto')
+      .isString()
+      .withMessage('Username deve essere una stringa')
+      .trim()
+      .isLength({ min: 1, max: 100 })
+      .withMessage('Username deve essere tra 1 e 100 caratteri'),
+    body('password')
+      .notEmpty()
+      .withMessage('Password richiesta')
+      .isString()
+      .withMessage('Password deve essere una stringa')
+      .isLength({ min: 1 })
+      .withMessage('Password non può essere vuota'),
+  ],
+  validate,
+  operatorLogin
+);
 
 /**
  * POST /api/v1/auth/login

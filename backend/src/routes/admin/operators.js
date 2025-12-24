@@ -8,6 +8,13 @@ import {
   getAdminTickets,
   getAdminReporting,
 } from '../../controllers/operatorController.js';
+import {
+  getOperators,
+  getOperator,
+  createOperator,
+  updateOperator,
+  deleteOperator,
+} from '../../controllers/operatorCrudController.js';
 import { authenticate } from '../../middleware/auth.js';
 import { requireAdmin } from '../../middleware/admin.js';
 
@@ -61,6 +68,43 @@ router.get('/tickets', authenticate, requireAdmin, getAdminTickets);
  * RF13: Pagina reportistica
  */
 router.get('/reporting', authenticate, requireAdmin, getAdminReporting);
+
+/**
+ * CRUD Operators
+ * Queste route devono essere definite DOPO le route specifiche sopra
+ * per evitare conflitti di routing
+ */
+
+/**
+ * GET /api/v1/admin/operators
+ * Lista tutti gli operatori
+ * Query: ?stato=...&reparto=...&search=...
+ */
+router.get('/operators', authenticate, requireAdmin, getOperators);
+
+/**
+ * GET /api/v1/admin/operators/:id
+ * Dettaglio operatore
+ */
+router.get('/operators/:id', authenticate, requireAdmin, getOperator);
+
+/**
+ * POST /api/v1/admin/operators
+ * Crea nuovo operatore
+ */
+router.post('/operators', authenticate, requireAdmin, createOperator);
+
+/**
+ * PUT /api/v1/admin/operators/:id
+ * Aggiorna operatore
+ */
+router.put('/operators/:id', authenticate, requireAdmin, updateOperator);
+
+/**
+ * DELETE /api/v1/admin/operators/:id
+ * Elimina operatore
+ */
+router.delete('/operators/:id', authenticate, requireAdmin, deleteOperator);
 
 export default router;
 
