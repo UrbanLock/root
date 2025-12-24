@@ -27,6 +27,8 @@ async function formatDonationResponse(donazione, options = {}) {
     scheduledPickup: donazione.dataRitiro || null,
     rejectionReason: donazione.motivoRifiuto || null,
     lockerId: donazione.lockerId || null,
+    cellaId: donazione.cellaId || null,
+    ritiroPressoComune: donazione.ritiroPressoComune || false,
     lockerName: null,
     lockerType: null,
     lockerPosition: null,
