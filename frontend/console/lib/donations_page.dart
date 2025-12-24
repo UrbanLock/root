@@ -487,14 +487,13 @@ class _DonationsPageState extends State<DonationsPage> {
 
   void _showCellSelectionDialog(Donation donation, Locker locker) async {
     final cells = await _lockerRepository.getLockerCells(locker.id);
-    final availableCells = cells.where((cell) => cell.isAvailable).toList();
     
-    if (availableCells.isEmpty) {
+    if (cells.isEmpty) {
       showCupertinoDialog(
         context: context,
         builder: (context) => CupertinoAlertDialog(
           title: const Text('Nessuna cella disponibile'),
-          content: Text('Non ci sono celle disponibili nel locker ${locker.name}'),
+          content: Text('Non ci sono celle nel locker ${locker.name}'),
           actions: [
             CupertinoDialogAction(
               child: const Text('OK'),
@@ -507,6 +506,7 @@ class _DonationsPageState extends State<DonationsPage> {
     }
 
     LockerCell? selectedCell;
+    List<LockerCell> cellsList = List.from(cells);
     final isDark = widget.themeManager.isDarkMode;
 
     showCupertinoDialog(
@@ -516,72 +516,117 @@ class _DonationsPageState extends State<DonationsPage> {
           return CupertinoAlertDialog(
             title: Text('Seleziona cella - ${locker.name}'),
             content: Container(
-              constraints: const BoxConstraints(maxHeight: 300),
+              constraints: const BoxConstraints(maxHeight: 400),
               child: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
-                  children: availableCells.map((cell) {
+                  children: cellsList.map((cell) {
                     final isSelected = selectedCell?.id == cell.id;
-                    return CupertinoButton(
-                      padding: EdgeInsets.zero,
-                      onPressed: () {
-                        setDialogState(() {
-                          selectedCell = cell;
-                        });
-                      },
-                      child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(12),
-                        margin: const EdgeInsets.only(bottom: 8),
-                        decoration: BoxDecoration(
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? AppColors.primary.withOpacity(0.2)
+                            : (isDark 
+                                ? CupertinoColors.darkBackgroundGray 
+                                : CupertinoColors.white),
+                        border: Border.all(
                           color: isSelected
-                              ? AppColors.primary.withOpacity(0.2)
-                              : (isDark 
-                                  ? CupertinoColors.darkBackgroundGray 
-                                  : CupertinoColors.white),
-                          border: Border.all(
-                            color: isSelected
-                                ? AppColors.primary
-                                : CupertinoColors.separator,
-                          ),
-                          borderRadius: BorderRadius.circular(8),
+                              ? AppColors.primary
+                              : CupertinoColors.separator,
                         ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              isSelected
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          CupertinoButton(
+                            padding: EdgeInsets.zero,
+                            minSize: 0,
+                            onPressed: () {
+                              setDialogState(() {
+                                if (cell.isAvailable) {
+                                  selectedCell = cell;
+                                }
+                              });
+                            },
+                            child: Icon(
+                              isSelected && cell.isAvailable
                                   ? CupertinoIcons.check_mark_circled_solid
                                   : CupertinoIcons.circle,
-                              color: isSelected
+                              color: isSelected && cell.isAvailable
                                   ? AppColors.primary
                                   : CupertinoColors.systemGrey,
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    cell.cellNumber,
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: isDark 
-                                          ? CupertinoColors.white 
-                                          : CupertinoColors.black,
-                                    ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  cell.cellNumber,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: isDark 
+                                        ? CupertinoColors.white 
+                                        : CupertinoColors.black,
                                   ),
-                                  Text(
-                                    cell.size.label,
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: CupertinoColors.systemGrey,
-                                    ),
+                                ),
+                                Text(
+                                  cell.size.label,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: CupertinoColors.systemGrey,
                                   ),
-                                ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: cell.isAvailable
+                                  ? CupertinoColors.systemGreen.withOpacity(0.2)
+                                  : (cell.stato == 'manutenzione'
+                                      ? CupertinoColors.systemOrange.withOpacity(0.2)
+                                      : CupertinoColors.systemRed.withOpacity(0.2)),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              cell.isAvailable 
+                                  ? 'Disponibile' 
+                                  : (cell.stato == 'manutenzione' ? 'In manutenzione' : 'Occupata'),
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                color: cell.isAvailable
+                                    ? CupertinoColors.systemGreen
+                                    : (cell.stato == 'manutenzione' 
+                                        ? CupertinoColors.systemOrange 
+                                        : CupertinoColors.systemRed),
                               ),
                             ),
-                          ],
-                        ),
+                          ),
+                          const SizedBox(width: 8),
+                          CupertinoButton(
+                            padding: EdgeInsets.zero,
+                            minSize: 0,
+                            onPressed: () => _toggleCellStatusInDialog(cell, locker, setDialogState, cellsList),
+                            child: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: AppColors.primary.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Icon(
+                                CupertinoIcons.power,
+                                size: 16,
+                                color: AppColors.primary,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     );
                   }).toList(),
@@ -596,7 +641,7 @@ class _DonationsPageState extends State<DonationsPage> {
               ),
               CupertinoDialogAction(
                 onPressed: () {
-                  if (selectedCell == null) return;
+                  if (selectedCell == null || !selectedCell!.isAvailable) return;
                   Navigator.of(context).pop();
                   _updateDonationStatus(
                     donation,
@@ -609,7 +654,7 @@ class _DonationsPageState extends State<DonationsPage> {
                 child: Text(
                   'Conferma',
                   style: TextStyle(
-                    color: selectedCell != null
+                    color: selectedCell != null && selectedCell!.isAvailable
                         ? AppColors.primary
                         : CupertinoColors.systemGrey,
                   ),
@@ -620,6 +665,75 @@ class _DonationsPageState extends State<DonationsPage> {
         },
       ),
     );
+  }
+
+  Future<void> _toggleCellStatusInDialog(
+    LockerCell cell,
+    Locker locker,
+    StateSetter setDialogState,
+    List<LockerCell> cellsList,
+  ) async {
+    final newStatus = !cell.isAvailable;
+    final statoBackend = newStatus ? 'libera' : 'manutenzione';
+    
+    try {
+      final success = await _lockerRepository.updateCellStatus(cell.id, statoBackend);
+      if (success) {
+        setDialogState(() {
+          final index = cellsList.indexWhere((c) => c.id == cell.id);
+          if (index != -1) {
+            cellsList[index] = LockerCell(
+              id: cell.id,
+              cellNumber: cell.cellNumber,
+              type: cell.type,
+              size: cell.size,
+              isAvailable: newStatus,
+              stato: newStatus ? 'libera' : 'manutenzione',
+              pricePerHour: cell.pricePerHour,
+              pricePerDay: cell.pricePerDay,
+              itemName: cell.itemName,
+              itemDescription: cell.itemDescription,
+              itemImageUrl: cell.itemImageUrl,
+              storeName: cell.storeName,
+              availableUntil: cell.availableUntil,
+              borrowDuration: cell.borrowDuration,
+            );
+          }
+        });
+      } else {
+        if (mounted) {
+          showCupertinoDialog(
+            context: context,
+            builder: (context) => CupertinoAlertDialog(
+              title: const Text('Errore'),
+              content: const Text('Impossibile aggiornare lo stato della cella. Riprova più tardi.'),
+              actions: [
+                CupertinoDialogAction(
+                  child: const Text('OK'),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        showCupertinoDialog(
+          context: context,
+          builder: (context) => CupertinoAlertDialog(
+            title: const Text('Errore'),
+            content: Text('Errore durante l\'aggiornamento: ${e.toString()}'),
+            actions: [
+              CupertinoDialogAction(
+                child: const Text('OK'),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ],
+          ),
+        );
+      }
+    }
   }
 
   void _updateDonationStatus(
