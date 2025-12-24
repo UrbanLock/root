@@ -192,7 +192,7 @@ class _ReportIssuePageState extends State<ReportIssuePage> {
 
       if (widget.existingReport != null && widget.reportId != null) {
         await reportRepository.updateReport(
-          widget.reportId!,
+          id: widget.reportId!,
           category: _selectedCategory,
           description: _descriptionController.text.trim(),
           base64Photo: base64Photo,

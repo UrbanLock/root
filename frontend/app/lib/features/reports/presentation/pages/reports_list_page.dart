@@ -299,7 +299,7 @@ class _ReportsListPageState extends State<ReportsListPage> {
     final description = report.description;
     final date = report.createdAt;
     final lockerName = report.lockerName ?? 'N/A';
-    final cellNumber = report.cellaId;
+    final cellNumber = report.cellId;
     final hasPhoto = report.photoUrl != null;
 
     return Container(
@@ -318,7 +318,17 @@ class _ReportsListPageState extends State<ReportsListPage> {
             CupertinoPageRoute(
               builder: (context) => ReportDetailPage(
                 themeManager: widget.themeManager,
-                reportId: report.id,
+                report: {
+                  'id': report.id,
+                  'category': report.category,
+                  'description': report.description,
+                  'date': report.createdAt,
+                  'lockerName': lockerName,
+                  'cellNumber': cellNumber,
+                  'hasPhoto': hasPhoto,
+                  'lockerId': report.lockerId,
+                  'cellId': report.cellId,
+                },
                 onReportDeleted: () {
                   _deleteReport(report.id);
                 },

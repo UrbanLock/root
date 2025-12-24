@@ -100,10 +100,24 @@ class _MyAppState extends State<MyApp> {
             themeManager: _themeManager,
             onAccepted: () async {
               final prefs = await SharedPreferences.getInstance();
+              // Registra accettazione termini sul backend (best effort)
+              try {
+                await AppDependencies.authRepository.acceptTerms(version: 'v1');
+              } catch (_) {
+                // Se fallisce, continuiamo comunque a livello locale
+              }
               await prefs.setBool('privacy_terms_accepted_v1', true);
+              if (!mounted) return;
               setState(() {
                 _privacyTermsAccepted = true;
               });
+              // Dopo l'accettazione iniziale porta sempre alla Home
+              Navigator.of(context).pushAndRemoveUntil(
+                CupertinoPageRoute(
+                  builder: (_) => HomePage(themeManager: _themeManager),
+                ),
+                (route) => false,
+              );
             },
           );
         } else {

@@ -83,6 +83,20 @@ const userSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.Mixed,
       default: {},
     },
+    // Accettazione termini di utilizzo / privacy
+    termsAccepted: {
+      type: Boolean,
+      default: false,
+    },
+    termsAcceptedVersion: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    termsAcceptedAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: false, // Usiamo dataRegistrazione manuale

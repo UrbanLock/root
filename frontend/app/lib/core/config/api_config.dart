@@ -27,6 +27,9 @@ class ApiConfig {
   
   /// Endpoint per ottenere lo storico utilizzi
   static const String historyEndpoint = '/cells/history';
+
+  /// Endpoint per richiedere una nuova cella
+  static const String requestCellEndpoint = '/cells/request';
   
   /// Endpoint per donare un oggetto
   static const String donateEndpoint = '/donations';
@@ -40,6 +43,9 @@ class ApiConfig {
   /// Endpoint notifiche
   static const String notificationsEndpoint = '/notifications';
   static const String notificationsUnreadEndpoint = '/notifications/unread';
+
+  /// Endpoint segnalazioni
+  static const String reportsEndpoint = '/reports';
 }
 
 

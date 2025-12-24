@@ -27,47 +27,41 @@ class ActiveCell {
     this.endTime,
     required this.type,
   });
-  
-  /// Crea un'istanza da JSON (per quando il backend sarà pronto)
-  /// 
-  /// **TODO**: Implementare quando il backend fornirà i dati in formato JSON
-  /// ```dart
-  /// factory ActiveCell.fromJson(Map<String, dynamic> json) {
-  ///   return ActiveCell(
-  ///     id: json['id'],
-  ///     lockerId: json['locker_id'],
-  ///     lockerName: json['locker_name'],
-  ///     lockerType: json['locker_type'],
-  ///     cellNumber: json['cell_number'],
-  ///     cellId: json['cell_id'],
-  ///     startTime: DateTime.parse(json['start_time']),
-  ///     endTime: json['end_time'] != null ? DateTime.parse(json['end_time']) : null,
-  ///     type: CellUsageType.values.firstWhere(
-  ///       (e) => e.toString() == json['type'],
-  ///       orElse: () => CellUsageType.deposited,
-  ///     ),
-  ///   );
-  /// }
-  /// ```
-  
-  /// Converte l'istanza in JSON (per quando invieremo dati al backend)
-  /// 
-  /// **TODO**: Implementare quando invieremo dati al backend
-  /// ```dart
-  /// Map<String, dynamic> toJson() {
-  ///   return {
-  ///     'id': id,
-  ///     'locker_id': lockerId,
-  ///     'locker_name': lockerName,
-  ///     'locker_type': lockerType,
-  ///     'cell_number': cellNumber,
-  ///     'cell_id': cellId,
-  ///     'start_time': startTime.toIso8601String(),
-  ///     'end_time': endTime?.toIso8601String(),
-  ///     'type': type.toString(),
-  ///   };
-  /// }
-  /// ```
+
+  /// Crea un'istanza da JSON restituito dal backend.
+  factory ActiveCell.fromJson(Map<String, dynamic> json) {
+    return ActiveCell(
+      id: json['id'] as String,
+      lockerId: json['lockerId'] as String,
+      lockerName: json['lockerName'] as String,
+      lockerType: json['lockerType'] as String,
+      cellNumber: json['cellNumber'] as String,
+      cellId: json['cellId'] as String,
+      startTime: DateTime.parse(json['startTime'] as String),
+      endTime: json['endTime'] != null
+          ? DateTime.parse(json['endTime'] as String)
+          : null,
+      type: CellUsageType.values.firstWhere(
+        (e) => e.toString().split('.').last == (json['type'] as String? ?? ''),
+        orElse: () => CellUsageType.deposited,
+      ),
+    );
+  }
+
+  /// Converte l'istanza in JSON per l'invio al backend.
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'lockerId': lockerId,
+      'lockerName': lockerName,
+      'lockerType': lockerType,
+      'cellNumber': cellNumber,
+      'cellId': cellId,
+      'startTime': startTime.toIso8601String(),
+      'endTime': endTime?.toIso8601String(),
+      'type': type.toString().split('.').last,
+    };
+  }
   
   /// Formatta la data di inizio per la visualizzazione
   String get formattedStartTime {

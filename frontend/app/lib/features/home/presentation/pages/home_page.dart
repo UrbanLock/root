@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:location/location.dart';
 import 'package:app/core/config/map_config.dart';
 import 'package:app/core/theme/theme_manager.dart';
@@ -1119,18 +1120,21 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
                       final authRepository = AppDependencies.authRepository;
                       final authService = AppDependencies.authService;
 
-                      if (authRepository != null) {
-                        try {
-                          await authRepository.logout();
-                        } catch (_) {
-                          // Ignora errori di logout (token scaduto, ecc.)
-                        }
+                      // 1. Chiama sempre l'API di logout lato backend (se disponibile)
+                      try {
+                        await authRepository?.logout();
+                      } catch (_) {
+                        // Ignora errori di logout (token scaduto, rete assente, ecc.)
                       }
 
-                      if (authService != null) {
-                        await authService.clearTokens();
-                      }
+                      // 2. Pulisci i token locali (se servizio disponibile)
+                      await authService?.clearTokens();
 
+                      // 3. Resetta l'accettazione di privacy/termini
+                      final prefs = await SharedPreferences.getInstance();
+                      await prefs.remove('privacy_terms_accepted_v1');
+
+                      // 4. Aggiorna lo stato UI
                       if (!mounted) return;
                       setState(() {
                         _isAuthenticated = false;

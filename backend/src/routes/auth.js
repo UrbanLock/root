@@ -1,6 +1,6 @@
 import express from 'express';
 import { body, validationResult } from 'express-validator';
-import { login, refreshToken, getMe, logout } from '../controllers/authController.js';
+import { login, refreshToken, getMe, logout, acceptTerms } from '../controllers/authController.js';
 import { operatorLogin } from '../controllers/operatorAuthController.js';
 import { authenticate } from '../middleware/auth.js';
 import { ValidationError } from '../middleware/errorHandler.js';
@@ -123,6 +123,27 @@ router.get('/me', authenticate, getMe);
  * Richiede autenticazione
  */
 router.post('/logout', authenticate, logout);
+
+/**
+ * POST /api/v1/auth/accept-terms
+ * Salva l'accettazione dei termini / privacy per l'utente corrente
+ * Richiede autenticazione
+ */
+router.post(
+  '/accept-terms',
+  authenticate,
+  [
+    body('version')
+      .optional()
+      .isString()
+      .withMessage('version deve essere una stringa')
+      .trim()
+      .isLength({ min: 1, max: 50 })
+      .withMessage('version deve essere tra 1 e 50 caratteri'),
+  ],
+  validate,
+  acceptTerms
+);
 
 export default router;
 

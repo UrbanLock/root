@@ -1,8 +1,10 @@
 import 'package:flutter/cupertino.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:app/core/di/app_dependencies.dart';
 import 'package:app/core/styles/app_colors.dart';
 import 'package:app/core/api/api_exception.dart';
 import 'package:app/core/theme/theme_manager.dart';
+import 'package:app/features/auth/presentation/pages/privacy_terms_page.dart';
 
 class LoginPage extends StatefulWidget {
   final Function(bool) onLoginSuccess;
@@ -19,41 +21,17 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  final TextEditingController _codiceFiscaleController = TextEditingController();
   bool _isLoading = false;
   String? _errorMessage;
 
-  @override
-  void dispose() {
-    _codiceFiscaleController.dispose();
-    super.dispose();
+  /// Genera un codice fiscale di test casuale (16 caratteri)
+  String _generateTestCodiceFiscale() {
+    final millis = DateTime.now().millisecondsSinceEpoch.toString();
+    final raw = 'TSTUSR$millis'.toUpperCase();
+    return raw.padRight(16, 'X').substring(0, 16);
   }
 
   Future<void> _handleLogin(String tipoAutenticazione) async {
-    final codiceFiscale = _codiceFiscaleController.text.trim().toUpperCase();
-
-    // Validazione codice fiscale
-    if (codiceFiscale.isEmpty) {
-      setState(() {
-        _errorMessage = 'Inserisci il codice fiscale';
-      });
-      return;
-    }
-
-    if (codiceFiscale.length != 16) {
-      setState(() {
-        _errorMessage = 'Il codice fiscale deve essere di 16 caratteri';
-      });
-      return;
-    }
-
-    if (!RegExp(r'^[A-Z0-9]{16}$').hasMatch(codiceFiscale)) {
-      setState(() {
-        _errorMessage = 'Codice fiscale non valido';
-      });
-      return;
-    }
-
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -64,6 +42,9 @@ class _LoginPageState extends State<LoginPage> {
       if (authRepository == null) {
         throw Exception('Servizio di autenticazione non disponibile');
       }
+
+      // Genera un codice fiscale di test per il login (mock SPID/CIE)
+      final codiceFiscale = _generateTestCodiceFiscale();
 
       final loginResponse = await authRepository.login(
         codiceFiscale: codiceFiscale,
@@ -82,7 +63,37 @@ class _LoginPageState extends State<LoginPage> {
 
       if (mounted) {
         widget.onLoginSuccess(true);
-        Navigator.of(context).pop();
+
+        // Controlla se l'utente ha già accettato privacy e termini
+        final prefs = await SharedPreferences.getInstance();
+        final privacyTermsAccepted =
+            prefs.getBool('privacy_terms_accepted_v1') ?? false;
+
+        if (!privacyTermsAccepted) {
+          // Se non ha accettato, naviga alla pagina di privacy/termini
+          await Navigator.of(context).pushReplacement(
+            CupertinoPageRoute(
+              builder: (context) => PrivacyTermsPage(
+                themeManager: widget.themeManager,
+                onAccepted: () async {
+                  // Registra accettazione termini sul backend (best effort)
+                  try {
+                    await authRepository.acceptTerms(version: 'v1');
+                  } catch (_) {
+                    // Se fallisce, continuiamo comunque a livello locale
+                  }
+                  await prefs.setBool('privacy_terms_accepted_v1', true);
+                  if (mounted) {
+                    Navigator.of(context).pop(); // Chiudi PrivacyTermsPage
+                  }
+                },
+              ),
+            ),
+          );
+        } else {
+          // Se già accettati, torna semplicemente alla Home
+          Navigator.of(context).pop();
+        }
       }
     } on ValidationException catch (e) {
       setState(() {
@@ -100,74 +111,6 @@ class _LoginPageState extends State<LoginPage> {
         _isLoading = false;
       });
     }
-  }
-
-  void _showLoginDialog(String tipoAutenticazione, String tipoLabel) {
-    final isDark = widget.themeManager.isDarkMode;
-
-    showCupertinoDialog(
-      context: context,
-      builder: (context) => CupertinoAlertDialog(
-        title: Text('Accedi con $tipoLabel'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 16),
-            CupertinoTextField(
-              controller: _codiceFiscaleController,
-              placeholder: 'Codice Fiscale (16 caratteri)',
-              maxLength: 16,
-              textCapitalization: TextCapitalization.characters,
-              keyboardType: TextInputType.text,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.surface(isDark),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: _errorMessage != null
-                      ? CupertinoColors.systemRed
-                      : AppColors.borderSecondary(isDark),
-                ),
-              ),
-            ),
-            if (_errorMessage != null) ...[
-              const SizedBox(height: 8),
-              Text(
-                _errorMessage!,
-                style: TextStyle(
-                  color: CupertinoColors.systemRed,
-                  fontSize: 12,
-                ),
-              ),
-            ],
-          ],
-        ),
-        actions: [
-          CupertinoDialogAction(
-            isDestructiveAction: true,
-            onPressed: () {
-              _codiceFiscaleController.clear();
-              setState(() {
-                _errorMessage = null;
-              });
-              Navigator.of(context).pop();
-            },
-            child: const Text('Annulla'),
-          ),
-          CupertinoDialogAction(
-            onPressed: _isLoading
-                ? null
-                : () async {
-                    Navigator.of(context).pop();
-                    await _handleLogin(tipoAutenticazione);
-                  },
-            child: _isLoading
-                ? const CupertinoActivityIndicator()
-                : const Text('Accedi'),
-          ),
-        ],
-      ),
-    );
   }
 
   @override
@@ -247,7 +190,7 @@ class _LoginPageState extends State<LoginPage> {
                           borderRadius: BorderRadius.circular(12),
                           onPressed: _isLoading
                               ? null
-                              : () => _showLoginDialog('spid', 'SPID'),
+                              : () => _handleLogin('spid'),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
@@ -279,7 +222,7 @@ class _LoginPageState extends State<LoginPage> {
                           color: AppColors.primary(isDark),
                           onPressed: _isLoading
                               ? null
-                              : () => _showLoginDialog('cie', 'CIE'),
+                              : () => _handleLogin('cie'),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
@@ -304,6 +247,17 @@ class _LoginPageState extends State<LoginPage> {
                       if (_isLoading) ...[
                         const SizedBox(height: 16),
                         const CupertinoActivityIndicator(),
+                      ],
+                      if (_errorMessage != null) ...[
+                        const SizedBox(height: 16),
+                        Text(
+                          _errorMessage!,
+                          style: const TextStyle(
+                            color: CupertinoColors.systemRed,
+                            fontSize: 14,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
                       ],
                     ],
                   ),

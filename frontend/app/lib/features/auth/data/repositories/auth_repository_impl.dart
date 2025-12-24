@@ -103,6 +103,25 @@ class AuthRepositoryImpl implements AuthRepository {
       }
     }
   }
+
+  @override
+  Future<void> acceptTerms({String? version}) async {
+    try {
+      final body = <String, dynamic>{};
+      if (version != null && version.isNotEmpty) {
+        body['version'] = version;
+      }
+
+      await _apiClient.post(
+        '/auth/accept-terms',
+        body: body.isEmpty ? null : body,
+        requireAuth: true,
+      );
+    } on ApiException catch (e) {
+      // In caso di errore, rilanciamo un'eccezione generica per gestirla a livello UI se serve
+      throw Exception('Errore nella registrazione dell\'accettazione dei termini: ${e.message}');
+    }
+  }
 }
 
 /// Eccezione per errori di autenticazione

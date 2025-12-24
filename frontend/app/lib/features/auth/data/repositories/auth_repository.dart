@@ -24,6 +24,10 @@ abstract class AuthRepository {
   /// Effettua il logout
   /// Richiede autenticazione
   Future<void> logout();
+
+  /// Registra l'accettazione dei termini di utilizzo / privacy sul backend
+  /// Richiede autenticazione
+  Future<void> acceptTerms({String? version});
 }
 
 

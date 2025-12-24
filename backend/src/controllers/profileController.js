@@ -181,6 +181,11 @@ export async function getProfile(req, res, next) {
       ultimoAccesso: user.ultimoAccesso,
       ruolo: user.ruolo,
       preferenze: user.preferenze || [],
+      termini: {
+        accepted: user.termsAccepted || false,
+        version: user.termsAcceptedVersion || null,
+        acceptedAt: user.termsAcceptedAt || null,
+      },
       statistiche: {
         totaleUtilizzi,
         totaleSpeso,

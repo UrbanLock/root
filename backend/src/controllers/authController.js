@@ -72,6 +72,9 @@ export async function login(req, res, next) {
           nome: user.nome,
           cognome: user.cognome,
           ruolo: user.ruolo,
+          termsAccepted: user.termsAccepted || false,
+          termsAcceptedVersion: user.termsAcceptedVersion || null,
+          termsAcceptedAt: user.termsAcceptedAt || null,
         },
         tokens: {
           accessToken: tokens.accessToken,
@@ -192,11 +195,54 @@ export async function logout(req, res, next) {
   }
 }
 
+/**
+ * Accetta termini e condizioni / privacy per l'utente corrente
+ * POST /api/v1/auth/accept-terms
+ *
+ * Body opzionale: { version: 'v1' }
+ */
+export async function acceptTerms(req, res, next) {
+  try {
+    const userId = req.user.userId;
+    const { version } = req.body || {};
+
+    const TERMS_VERSION = process.env.TERMS_VERSION || 'v1';
+    const versionToSave = typeof version === 'string' && version.trim().length > 0
+      ? version.trim()
+      : TERMS_VERSION;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      throw new NotFoundError('Utente non trovato');
+    }
+
+    user.termsAccepted = true;
+    user.termsAcceptedVersion = versionToSave;
+    user.termsAcceptedAt = new Date();
+
+    await user.save();
+
+    logger.info(`Termini accettati per utente ${user.utenteId} (versione ${versionToSave})`);
+
+    res.json({
+      success: true,
+      data: {
+        termsAccepted: true,
+        termsAcceptedVersion: user.termsAcceptedVersion,
+        termsAcceptedAt: user.termsAcceptedAt,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export default {
   login,
   refreshToken,
   getMe,
   logout,
+  acceptTerms,
 };
 
 
