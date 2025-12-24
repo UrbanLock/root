@@ -199,6 +199,10 @@ export async function updateDonationStatus(req, res, next) {
     const { stato, motivoRifiuto, noteOperatore } = req.body;
     const operatoreId = req.user.userId;
 
+    // Log per debug
+    logger.info(`updateDonationStatus: donazioneId=${id}, stato ricevuto="${stato}", tipo=${typeof stato}, motivoRifiuto="${motivoRifiuto}"`);
+    logger.info(`updateDonationStatus: body completo:`, JSON.stringify(req.body));
+
     // Converti operatoreId (stringa) in ObjectId
     const operatoreObjectId = new mongoose.Types.ObjectId(operatoreId);
 
@@ -207,6 +211,9 @@ export async function updateDonationStatus(req, res, next) {
       throw new ValidationError('stato è obbligatorio');
     }
 
+    // Normalizza lo stato (rimuovi spazi, converti in stringa)
+    const statoNormalizzato = String(stato).trim().toLowerCase();
+
     const statiValidi = [
       'da_visionare',
       'in_valutazione',
@@ -214,14 +221,16 @@ export async function updateDonationStatus(req, res, next) {
       'concluso',
       'rifiutato',
     ];
-    if (!statiValidi.includes(stato)) {
+    
+    if (!statiValidi.includes(statoNormalizzato)) {
+      logger.warn(`updateDonationStatus: stato non valido ricevuto: "${stato}" (normalizzato: "${statoNormalizzato}")`);
       throw new ValidationError(
         `stato non valido. Valori accettati: ${statiValidi.join(', ')}`
       );
     }
 
     // Valida motivoRifiuto se stato="rifiutato"
-    if (stato === 'rifiutato' && !motivoRifiuto) {
+    if (statoNormalizzato === 'rifiutato' && !motivoRifiuto) {
       throw new ValidationError(
         'motivoRifiuto è obbligatorio quando stato è "rifiutato"'
       );
@@ -234,8 +243,8 @@ export async function updateDonationStatus(req, res, next) {
       throw new NotFoundError('Donazione non trovata');
     }
 
-    // Aggiorna stato e campi correlati
-    donazione.stato = stato;
+    // Aggiorna stato e campi correlati (usa stato normalizzato)
+    donazione.stato = statoNormalizzato;
     donazione.operatoreAssegnatoId = operatoreObjectId;
     donazione.dataAggiornamento = new Date();
 

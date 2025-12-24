@@ -86,8 +86,14 @@ class DonationService {
         'stato': status,
       };
       
-      // Se lo stato è 'rifiutato', il backend richiede motivoRifiuto
-      if (status == 'rifiutato' && motivoRifiuto != null && motivoRifiuto.isNotEmpty) {
+      // Se lo stato è 'rifiutato', il backend richiede motivoRifiuto (obbligatorio)
+      if (status == 'rifiutato') {
+        if (motivoRifiuto == null || motivoRifiuto.isEmpty) {
+          return {
+            'success': false,
+            'error': 'Il motivo del rifiuto è obbligatorio quando si rifiuta una donazione',
+          };
+        }
         body['motivoRifiuto'] = motivoRifiuto;
       }
 

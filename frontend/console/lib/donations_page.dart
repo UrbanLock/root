@@ -837,14 +837,17 @@ class _DonationsPageState extends State<DonationsPage> {
         break;
     }
 
+    // Debug: verifica che lo stato sia corretto
+    print('DonationsPage: Aggiornamento stato donazione ${donation.id}');
+    print('DonationsPage: Nuovo stato (frontend): ${newStatus.name}');
+    print('DonationsPage: Nuovo stato (backend): $statusBackend');
+    print('DonationsPage: Motivo rifiuto: ${motivoRifiuto ?? "null"}');
+
     try {
       final result = await DonationService.updateDonationStatus(
         donationId: donation.id,
         status: statusBackend,
-        lockerId: lockerId,
-        cellId: cellId,
-        isComunePickup: isComunePickup,
-        motivoRifiuto: motivoRifiuto,
+        motivoRifiuto: motivoRifiuto, // Passa sempre motivoRifiuto, anche se null
       );
 
       if (result['success'] == true) {
