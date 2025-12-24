@@ -1,7 +1,6 @@
 import Operatore from '../models/Operatore.js';
 import { ValidationError, NotFoundError, UnauthorizedError } from '../middleware/errorHandler.js';
 import logger from '../utils/logger.js';
-import bcrypt from 'bcryptjs';
 
 /**
  * GET /api/v1/admin/operators
