@@ -3,6 +3,57 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'api_client.dart';
 
 class DonationService {
+  /// Carica tutte le donazioni dall'API admin
+  static Future<List<Map<String, dynamic>>> getAllDonations() async {
+    try {
+      // Verifica che l'utente sia autenticato
+      final prefs = await SharedPreferences.getInstance();
+      final accessToken = prefs.getString('access_token');
+      if (accessToken == null || accessToken.isEmpty) {
+        throw Exception('Non autenticato. Effettua il login prima di caricare le donazioni.');
+      }
+
+      print('DonationService: Chiamata GET /admin/donations');
+
+      final response = await ApiClient.get('/admin/donations');
+
+      // Log per debug
+      print('DonationService: Status Code: ${response.statusCode}');
+      print('DonationService: Response Body: ${response.body}');
+
+      // Verifica che il body non sia vuoto
+      if (response.body.isEmpty || response.body.trim().isEmpty) {
+        throw Exception('Risposta vuota dal server (HTTP ${response.statusCode})');
+      }
+
+      Map<String, dynamic> data;
+      try {
+        data = jsonDecode(response.body) as Map<String, dynamic>;
+      } catch (e) {
+        throw Exception('Risposta non valida dal server: ${e.toString()}');
+      }
+
+      if (response.statusCode == 200 && data['success'] == true) {
+        final items = data['data']['items'] as List<dynamic>;
+        return items.map((item) => item as Map<String, dynamic>).toList();
+      } else {
+        String errorMessage = 'Errore durante il caricamento delle donazioni';
+        if (data['error'] != null) {
+          if (data['error'] is Map && data['error']['message'] != null) {
+            errorMessage = data['error']['message'];
+          } else if (data['error'] is String) {
+            errorMessage = data['error'];
+          }
+        } else if (data['message'] != null) {
+          errorMessage = data['message'];
+        }
+        throw Exception(errorMessage);
+      }
+    } catch (e) {
+      print('DonationService: Errore durante getAllDonations: $e');
+      rethrow;
+    }
+  }
   /// Aggiorna lo stato di una donazione
   /// 
   /// [donationId] - ID della donazione
@@ -28,24 +79,18 @@ class DonationService {
         };
       }
 
+      // Il controller admin accetta solo: stato, motivoRifiuto, noteOperatore
       final body = <String, dynamic>{
         'stato': status,
       };
+      
+      // Se lo stato è 'rifiutato', il backend richiede motivoRifiuto
+      // Per ora non lo gestiamo qui, ma potrebbe essere aggiunto in futuro
 
-      if (lockerId != null) {
-        body['lockerId'] = lockerId;
-      }
-      if (cellId != null) {
-        body['cellaId'] = cellId;
-      }
-      if (isComunePickup != null) {
-        body['isComunePickup'] = isComunePickup;
-      }
-
-      print('DonationService: Chiamata PUT /donations/$donationId con body: $body');
+      print('DonationService: Chiamata PUT /admin/donations/$donationId/status con body: $body');
 
       final response = await ApiClient.put(
-        '/donations/$donationId',
+        '/admin/donations/$donationId/status',
         body: body,
       );
 

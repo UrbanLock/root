@@ -70,6 +70,7 @@ const userSchema = new mongoose.Schema(
       ref: 'User',
       default: null,
       sparse: true, // Permette null ma mantiene index se presente
+      index: true, // Index per ricerca account figli (RF1)
     },
     // RF8: Preferenze personali per filtri locker
     preferenze: {
@@ -90,9 +91,7 @@ const userSchema = new mongoose.Schema(
 );
 
 // Index per ricerca rapida
-// Nota: utenteId e codiceFiscale hanno già index: true nel campo, quindi non serve qui
-// genitoreId ha sparse: true, quindi l'index è necessario qui
-userSchema.index({ genitoreId: 1 }); // Index per ricerca account figli (RF1)
+// Nota: utenteId, codiceFiscale e genitoreId hanno già index: true nel campo, quindi non serve qui
 
 // Metodo per rimuovere campi sensibili dalla serializzazione (GDPR RNF5)
 userSchema.methods.toJSON = function () {

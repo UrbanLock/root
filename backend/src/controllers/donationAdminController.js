@@ -34,6 +34,7 @@ async function formatAdminDonationResponse(donazione) {
     scheduledPickup: donazione.dataRitiro || null,
     rejectionReason: donazione.motivoRifiuto || null,
     lockerId: donazione.lockerId || null,
+    cellaId: donazione.cellaId || null,
     lockerName: null,
     lockerType: null,
     lockerPosition: null,

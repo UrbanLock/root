@@ -44,11 +44,110 @@ class _DonationsPageState extends State<DonationsPage> {
     super.dispose();
   }
 
-  void _loadDonations() {
-    setState(() {
-      _allDonations = mockDonations;
-      _filteredDonations = mockDonations;
-    });
+  Future<void> _loadDonations() async {
+    try {
+      final donationsData = await DonationService.getAllDonations();
+      
+      // Mappa le donazioni dal backend al modello frontend
+      final donations = donationsData.map((data) {
+        // Mappa lo stato dal backend al frontend
+        DonationStatus status;
+        switch (data['status'] as String) {
+          case 'da_visionare':
+            status = DonationStatus.daVisionare;
+            break;
+          case 'in_valutazione':
+            status = DonationStatus.inValutazione;
+            break;
+          case 'in_ritiro':
+          case 'concluso':
+            status = DonationStatus.accettata;
+            break;
+          case 'rifiutato':
+            status = DonationStatus.rifiutata;
+            break;
+          default:
+            status = DonationStatus.daVisionare;
+        }
+
+        // Mappa la categoria
+        DonationCategory category;
+        final categoriaStr = (data['categoria'] as String?)?.toLowerCase() ?? '';
+        final tipoAttrezzaturaStr = (data['tipoAttrezzatura'] as String?)?.toLowerCase() ?? '';
+        
+        if (categoriaStr.contains('sport') || tipoAttrezzaturaStr == 'sportiva') {
+          category = DonationCategory.sportivi;
+        } else if (categoriaStr.contains('person') || tipoAttrezzaturaStr == 'abbigliamento') {
+          category = DonationCategory.personali;
+        } else if (categoriaStr.contains('pet') || categoriaStr.contains('cane') || categoriaStr.contains('gatto')) {
+          category = DonationCategory.petFriendly;
+        } else if (categoriaStr.contains('commer') || categoriaStr.contains('negozio')) {
+          category = DonationCategory.commerciali;
+        } else if (categoriaStr.contains('ciclo') || categoriaStr.contains('bici')) {
+          category = DonationCategory.cicloturistici;
+        } else {
+          category = DonationCategory.personali; // Default
+        }
+
+        // Costruisci il nome del donatore
+        final donorName = data['userName'] != null && data['userSurname'] != null
+            ? '${data['userName']} ${data['userSurname']}'
+            : 'Donatore sconosciuto';
+
+        // Parsa la data
+        DateTime createdAt;
+        if (data['createdAt'] != null) {
+          if (data['createdAt'] is String) {
+            createdAt = DateTime.tryParse(data['createdAt'] as String) ?? DateTime.now();
+          } else {
+            createdAt = DateTime.now();
+          }
+        } else {
+          createdAt = DateTime.now();
+        }
+
+        return Donation(
+          id: data['id'] as String? ?? '',
+          donorName: donorName,
+          itemName: data['nomeOggetto'] as String? ?? 'Oggetto senza nome',
+          itemDescription: data['descrizione'] as String? ?? '',
+          category: category,
+          createdAt: createdAt,
+          status: status,
+          photoUrl: data['photoUrl'] as String?,
+          lockerId: data['lockerId'] as String?,
+          cellId: data['cellaId'] as String?,
+          isComunePickup: false, // Il backend non ha questo campo nella risposta, ma possiamo dedurlo se lockerId è null
+        );
+      }).toList();
+
+      setState(() {
+        _allDonations = donations;
+        _filteredDonations = donations;
+      });
+    } catch (e) {
+      print('Errore durante il caricamento delle donazioni: $e');
+      // In caso di errore, usa i mock come fallback
+      if (mounted) {
+        setState(() {
+          _allDonations = mockDonations;
+          _filteredDonations = mockDonations;
+        });
+        showCupertinoDialog(
+          context: context,
+          builder: (context) => CupertinoAlertDialog(
+            title: const Text('Errore'),
+            content: Text('Impossibile caricare le donazioni dal server. Usando dati locali.\n\nErrore: ${e.toString()}'),
+            actions: [
+              CupertinoDialogAction(
+                child: const Text('OK'),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ],
+          ),
+        );
+      }
+    }
   }
 
   void _onSearchChanged() {
@@ -631,19 +730,20 @@ class _DonationsPageState extends State<DonationsPage> {
     bool? isComunePickup,
   }) async {
     // Mappa lo stato dal frontend al backend
+    // Backend si aspetta: 'da_visionare', 'in_valutazione', 'in_ritiro', 'concluso', 'rifiutato'
     String statusBackend;
     switch (newStatus) {
       case DonationStatus.daVisionare:
-        statusBackend = 'daVisionare';
+        statusBackend = 'da_visionare';
         break;
       case DonationStatus.inValutazione:
-        statusBackend = 'inValutazione';
+        statusBackend = 'in_valutazione';
         break;
       case DonationStatus.accettata:
-        statusBackend = 'accettata';
+        statusBackend = 'in_ritiro'; // Quando accettata, va in ritiro
         break;
       case DonationStatus.rifiutata:
-        statusBackend = 'rifiutata';
+        statusBackend = 'rifiutato';
         break;
     }
 
