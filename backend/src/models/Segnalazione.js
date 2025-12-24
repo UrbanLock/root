@@ -111,27 +111,19 @@ segnalazioneSchema.methods.toJSON = function () {
 
 /**
  * Metodo statico: genera segnalazioneId univoco
- * Formato: "SEG-001", "SEG-002", ecc.
+ *
+ * Per evitare errori di chiave duplicata (E11000) dovuti a
+ * eventuali dati "sporchi" o ambienti multipli, usiamo un
+ * identificativo derivato da ObjectId, invece di leggere
+ * l'ultimo record dal DB.
+ *
+ * Formato: SEG-<6caratteri esadecimali>
+ * Esempio: SEG-A1B2C3
  */
 segnalazioneSchema.statics.generateSegnalazioneId = async function () {
-  const lastSegnalazione = await this.findOne({}, { segnalazioneId: 1 })
-    .sort({ segnalazioneId: -1 })
-    .lean();
-
-  if (!lastSegnalazione || !lastSegnalazione.segnalazioneId) {
-    return 'SEG-001';
-  }
-
-  // Estrai numero da segnalazioneId (es. "SEG-001" -> 1)
-  const match = lastSegnalazione.segnalazioneId.match(/SEG-(\d+)/);
-  if (match) {
-    const lastNumber = parseInt(match[1], 10);
-    const nextNumber = lastNumber + 1;
-    return `SEG-${nextNumber.toString().padStart(3, '0')}`;
-  }
-
-  // Fallback se formato non riconosciuto
-  return 'SEG-001';
+  const objectId = new mongoose.Types.ObjectId().toString();
+  const suffix = objectId.slice(-6).toUpperCase();
+  return `SEG-${suffix}`;
 };
 
 const Segnalazione = mongoose.model('Segnalazione', segnalazioneSchema);
