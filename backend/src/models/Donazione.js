@@ -10,8 +10,7 @@ const donazioneSchema = new mongoose.Schema(
       index: true,
     },
     utenteId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
+      type: mongoose.Schema.Types.Mixed, // Accetta sia ObjectId che String
       required: true,
       index: true,
     },

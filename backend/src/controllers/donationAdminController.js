@@ -48,7 +48,28 @@ async function formatAdminDonationResponse(donazione) {
 
   // Popola utente
   if (donazione.utenteId) {
-    const user = await User.findById(donazione.utenteId).lean();
+    let user = null;
+    const utenteIdValue = donazione.utenteId;
+    
+    // Se è un ObjectId, prova a cercare per _id
+    if (utenteIdValue instanceof mongoose.Types.ObjectId) {
+      try {
+        user = await User.findById(utenteIdValue).lean();
+      } catch (e) {
+        // Se fallisce, ignora
+      }
+    }
+    
+    // Se non trovato e utenteId è una stringa (come "USR-001"), cerca per il campo utenteId
+    if (!user && typeof utenteIdValue === 'string') {
+      user = await User.findOne({ utenteId: utenteIdValue }).lean();
+    }
+    
+    // Se ancora non trovato, prova a convertire in stringa
+    if (!user) {
+      user = await User.findOne({ utenteId: utenteIdValue.toString() }).lean();
+    }
+    
     if (user) {
       response.userName = user.nome;
       response.userSurname = user.cognome;
