@@ -258,6 +258,55 @@ export async function updateDonationStatus(req, res, next) {
 
     await donazione.save();
 
+    // Crea notifica per l'utente in base al nuovo stato
+    try {
+      let titolo;
+      let messaggio;
+
+      switch (statoNormalizzato) {
+        case 'in_valutazione':
+          titolo = 'Donazione in valutazione';
+          messaggio = `La tua donazione "${donazione.nomeOggetto}" è in fase di valutazione da parte di un operatore.`;
+          break;
+        case 'in_ritiro':
+          titolo = 'Ritiro donazione programmato';
+          messaggio =
+            'Il ritiro della tua donazione è stato programmato. Controlla i dettagli nella sezione donazioni.';
+          break;
+        case 'concluso':
+          titolo = 'Donazione completata';
+          messaggio = `Grazie! La tua donazione "${donazione.nomeOggetto}" è stata completata.`;
+          break;
+        case 'rifiutato':
+          titolo = 'Donazione rifiutata';
+          messaggio =
+            motivoRifiuto && motivoRifiuto.length > 0
+              ? `La tua donazione "${donazione.nomeOggetto}" è stata rifiutata: ${motivoRifiuto}`
+              : `La tua donazione "${donazione.nomeOggetto}" è stata rifiutata.`;
+          break;
+        default:
+          titolo = 'Aggiornamento donazione';
+          messaggio = `Lo stato della tua donazione "${donazione.nomeOggetto}" è stato aggiornato a ${statoNormalizzato}.`;
+          break;
+      }
+
+      await createNotification(
+        donazione.utenteId,
+        'sistema',
+        titolo,
+        messaggio,
+        {
+          donazioneId: donazione.donazioneId,
+          status: statoNormalizzato,
+        }
+      );
+    } catch (notificationError) {
+      logger.warn(
+        `Errore creazione notifica stato donazione ${id}:`,
+        notificationError
+      );
+    }
+
     // Formatta risposta
     const donationResponse = await formatAdminDonationResponse(donazione);
 

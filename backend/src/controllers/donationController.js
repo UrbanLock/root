@@ -9,6 +9,7 @@ import {
 } from '../middleware/errorHandler.js';
 import logger from '../utils/logger.js';
 import { savePhoto, deletePhoto } from '../utils/photoStorage.js';
+import { createNotification } from '../services/notificationService.js';
 
 /**
  * Formatta Donazione come DonationResponse per frontend
@@ -147,6 +148,26 @@ export async function createDonation(req, res, next) {
     });
 
     await donazione.save();
+
+    // Crea notifica per l'utente: donazione inviata
+    try {
+      await createNotification(
+        userObjectId,
+        'sistema',
+        'Donazione inviata',
+        `La tua donazione "${nomeOggetto}" è stata registrata ed è in attesa di verifica.`,
+        {
+          donazioneId,
+          status: 'da_visionare',
+        }
+      );
+    } catch (notificationError) {
+      logger.warn(
+        `Errore creazione notifica per donazione ${donazioneId}:`,
+        notificationError
+      );
+      // Non bloccare la creazione della donazione se la notifica fallisce
+    }
 
     // Formatta risposta
     const donationResponse = await formatDonationResponse(donazione);
