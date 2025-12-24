@@ -94,8 +94,7 @@ const lockerSchema = new mongoose.Schema(
 );
 
 // Index per ricerca rapida
-lockerSchema.index({ lockerId: 1 });
-lockerSchema.index({ stato: 1 });
+// Nota: lockerId e stato hanno già index: true nel campo, quindi non serve qui
 // RF2: Index geospaziale per ricerche per distanza
 lockerSchema.index({ coordinate: '2dsphere' });
 

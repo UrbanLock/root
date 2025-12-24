@@ -96,15 +96,11 @@ const cellSchema = new mongoose.Schema(
 );
 
 // Index per ricerca rapida
-cellSchema.index({ cellaId: 1 });
-cellSchema.index({ lockerId: 1 });
-cellSchema.index({ stato: 1 });
-cellSchema.index({ tipo: 1 });
+// Nota: cellaId, lockerId, stato, tipo, negozioId, disponibile hanno già index: true nel campo
+// Non serve definirli di nuovo qui, ma gli index composti sono necessari
 // Index composto per query frequenti
 cellSchema.index({ lockerId: 1, stato: 1 });
 cellSchema.index({ lockerId: 1, tipo: 1 });
-cellSchema.index({ negozioId: 1 });
-cellSchema.index({ disponibile: 1 });
 
 // Virtual: isAvailable getter
 cellSchema.virtual('isAvailable').get(function () {

@@ -97,10 +97,11 @@ const donazioneSchema = new mongoose.Schema(
 );
 
 // Index per performance
+// Nota: donazioneId, utenteId, lockerId, cellaId, stato, dataCreazione, operatoreAssegnatoId hanno già index: true nel campo
+// Manteniamo solo gli indici composti necessari
 donazioneSchema.index({ utenteId: 1, stato: 1 });
 donazioneSchema.index({ utenteId: 1, dataCreazione: -1 });
 donazioneSchema.index({ stato: 1, dataCreazione: -1 });
-donazioneSchema.index({ operatoreAssegnatoId: 1 });
 
 // Metodo per rimuovere campi interni dalla serializzazione (GDPR RNF5)
 donazioneSchema.methods.toJSON = function () {

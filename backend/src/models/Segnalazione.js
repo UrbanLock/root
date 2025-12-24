@@ -95,12 +95,13 @@ const segnalazioneSchema = new mongoose.Schema(
 );
 
 // Index per performance
+// Nota: segnalazioneId, utenteId, lockerId, cellaId, categoria, priorita, stato, dataCreazione, operatoreAssegnatoId, interventoManutenzioneId hanno già index: true nel campo
+// Manteniamo solo gli indici composti necessari
 segnalazioneSchema.index({ utenteId: 1, stato: 1 });
 segnalazioneSchema.index({ utenteId: 1, dataCreazione: -1 });
 segnalazioneSchema.index({ stato: 1, priorita: -1, dataCreazione: -1 });
 segnalazioneSchema.index({ categoria: 1, stato: 1 });
 segnalazioneSchema.index({ operatoreAssegnatoId: 1, stato: 1 });
-segnalazioneSchema.index({ interventoManutenzioneId: 1 });
 
 // Metodo per rimuovere campi interni dalla serializzazione (GDPR RNF5)
 segnalazioneSchema.methods.toJSON = function () {

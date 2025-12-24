@@ -1092,23 +1092,27 @@ class _LockerDetailPageState extends State<LockerDetailPage> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
-                      color: cell.isAvailable
-                          ? CupertinoColors.systemGreen.withOpacity(0.2)
-                          : CupertinoColors.systemRed.withOpacity(0.2),
+                      color: cell.stato == 'manutenzione'
+                          ? CupertinoColors.systemOrange.withOpacity(0.2)
+                          : cell.isAvailable
+                              ? CupertinoColors.systemGreen.withOpacity(0.2)
+                              : CupertinoColors.systemRed.withOpacity(0.2),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
-                      cell.isAvailable 
-                          ? 'Disponibile' 
-                          : (cell.stato == 'manutenzione' ? 'In manutenzione' : 'Occupata'),
+                      cell.stato == 'manutenzione'
+                          ? 'In manutenzione'
+                          : cell.isAvailable 
+                              ? 'Disponibile' 
+                              : 'Occupata',
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w500,
-                        color: cell.isAvailable
-                            ? CupertinoColors.systemGreen
-                            : (cell.stato == 'manutenzione' 
-                                ? CupertinoColors.systemOrange 
-                                : CupertinoColors.systemRed),
+                        color: cell.stato == 'manutenzione'
+                            ? CupertinoColors.systemOrange
+                            : cell.isAvailable
+                                ? CupertinoColors.systemGreen
+                                : CupertinoColors.systemRed,
                       ),
                     ),
                   ),

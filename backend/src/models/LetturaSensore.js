@@ -48,9 +48,9 @@ const letturaSensoreSchema = new mongoose.Schema(
 );
 
 // Index per performance
+// Nota: letturaId, sensoreId, timestamp, stato hanno già index: true nel campo
+// Manteniamo solo gli indici composti necessari
 letturaSensoreSchema.index({ sensoreId: 1, timestamp: -1 });
-letturaSensoreSchema.index({ timestamp: -1 });
-letturaSensoreSchema.index({ stato: 1 });
 
 // Metodo per rimuovere campi interni dalla serializzazione (GDPR RNF5)
 letturaSensoreSchema.methods.toJSON = function () {

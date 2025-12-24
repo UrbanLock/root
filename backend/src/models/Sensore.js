@@ -79,9 +79,9 @@ const sensoreSchema = new mongoose.Schema(
 );
 
 // Index
+// Nota: sensoreId, lockerId, tipo, stato hanno già index: true nel campo
+// Manteniamo solo l'indice composto necessario
 sensoreSchema.index({ lockerId: 1, tipo: 1 });
-sensoreSchema.index({ stato: 1 });
-sensoreSchema.index({ tipo: 1 });
 
 // Metodo per rimuovere campi interni dalla serializzazione (GDPR RNF5)
 sensoreSchema.methods.toJSON = function () {

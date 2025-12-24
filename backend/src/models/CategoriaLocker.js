@@ -55,8 +55,8 @@ const categoriaLockerSchema = new mongoose.Schema(
 );
 
 // Index
-categoriaLockerSchema.index({ nome: 1 });
-categoriaLockerSchema.index({ attiva: 1 });
+// Nota: categoriaId, nome, attiva hanno già index: true nel campo
+// Non serve definirli di nuovo qui
 
 // Metodo per rimuovere campi interni dalla serializzazione (GDPR RNF5)
 categoriaLockerSchema.methods.toJSON = function () {

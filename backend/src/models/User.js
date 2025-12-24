@@ -90,8 +90,8 @@ const userSchema = new mongoose.Schema(
 );
 
 // Index per ricerca rapida
-userSchema.index({ utenteId: 1 });
-userSchema.index({ codiceFiscale: 1 });
+// Nota: utenteId e codiceFiscale hanno già index: true nel campo, quindi non serve qui
+// genitoreId ha sparse: true, quindi l'index è necessario qui
 userSchema.index({ genitoreId: 1 }); // Index per ricerca account figli (RF1)
 
 // Metodo per rimuovere campi sensibili dalla serializzazione (GDPR RNF5)

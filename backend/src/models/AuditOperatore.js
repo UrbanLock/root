@@ -71,10 +71,11 @@ const auditOperatoreSchema = new mongoose.Schema(
 );
 
 // Index per performance
+// Nota: auditId, operatoreId, azione, entita, entitaId, timestamp hanno già index: true nel campo
+// Manteniamo solo gli indici composti necessari
 auditOperatoreSchema.index({ operatoreId: 1, timestamp: -1 });
 auditOperatoreSchema.index({ azione: 1, timestamp: -1 });
 auditOperatoreSchema.index({ entita: 1, entitaId: 1 });
-auditOperatoreSchema.index({ timestamp: -1 });
 
 // Metodo per rimuovere campi interni dalla serializzazione (GDPR RNF5)
 auditOperatoreSchema.methods.toJSON = function () {

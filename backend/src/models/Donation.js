@@ -52,7 +52,8 @@ const donationSchema = new mongoose.Schema(
 );
 
 // Index per ricerca rapida
-donationSchema.index({ donazioneId: 1 }, { unique: true });
+// Nota: donazioneId ha unique: true che crea automaticamente un indice
+// Aggiungiamo solo gli indici necessari per i campi senza index: true
 donationSchema.index({ utenteId: 1 });
 donationSchema.index({ stato: 1 });
 donationSchema.index({ cellaId: 1 });

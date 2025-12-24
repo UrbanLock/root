@@ -113,13 +113,8 @@ const operatoreSchema = new mongoose.Schema(
 );
 
 // Index
-operatoreSchema.index({ username: 1 });
-operatoreSchema.index({ operatoreId: 1 });
-operatoreSchema.index({ userId: 1 });
-operatoreSchema.index({ matricola: 1 });
-operatoreSchema.index({ stato: 1 });
-operatoreSchema.index({ reparto: 1 });
-operatoreSchema.index({ attivo: 1 });
+// Nota: username, operatoreId, userId, matricola, stato, reparto, attivo hanno già index: true nel campo
+// Non serve definirli di nuovo qui
 
 // Metodo per rimuovere campi interni dalla serializzazione (GDPR RNF5)
 operatoreSchema.methods.toJSON = function () {
