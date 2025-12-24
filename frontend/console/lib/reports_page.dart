@@ -5,6 +5,7 @@ import 'package:console/features/reports/domain/models/report.dart';
 import 'package:console/features/reports/data/mock_reports.dart';
 import 'package:console/features/lockers/data/mock_lockers.dart';
 import 'package:console/report_detail_page.dart';
+import 'package:console/core/api/report_service.dart';
 
 class ReportsPage extends StatefulWidget {
   final ThemeManager themeManager;
@@ -37,45 +38,195 @@ class _ReportsPageState extends State<ReportsPage> {
     super.dispose();
   }
 
-  void _loadReports() {
-    setState(() {
-      _allReports = mockReports;
-      _filteredReports = mockReports;
-    });
+  Future<void> _loadReports() async {
+    try {
+      final reportsData = await ReportService.getAllReports();
+      
+      // Mappa le segnalazioni dal backend al modello frontend
+      final reports = reportsData.map((data) {
+        // Mappa lo stato dal backend al frontend
+        // Backend: 'aperta', 'in_analisi', 'assegnata', 'in_lavorazione', 'risolta', 'chiusa'
+        // Frontend: inSospeso, visionata, inManutenzione, conclusa
+        ReportStatus status;
+        switch (data['status'] as String) {
+          case 'aperta':
+            status = ReportStatus.inSospeso;
+            break;
+          case 'in_analisi':
+          case 'assegnata':
+            status = ReportStatus.visionata;
+            break;
+          case 'in_lavorazione':
+            status = ReportStatus.inManutenzione;
+            break;
+          case 'risolta':
+          case 'chiusa':
+            status = ReportStatus.conclusa;
+            break;
+          default:
+            status = ReportStatus.inSospeso;
+        }
+
+        // Mappa la categoria - il backend usa: 'anomalia', 'guasto', 'vandalismo', 'pulizia', 'sicurezza', 'altro'
+        // Il frontend usa: 'cell_not_opening', 'bluetooth_connection', 'damaged_cell', 'damaged_locker', 'cell_not_closing'
+        // Per ora mappiamo direttamente la categoria del backend
+        String category = data['category'] as String? ?? 'altro';
+        String categoryLabel = category;
+        
+        // Mappa le categorie backend a quelle frontend se necessario
+        switch (category) {
+          case 'anomalia':
+            categoryLabel = 'Anomalia';
+            break;
+          case 'guasto':
+            categoryLabel = 'Guasto';
+            break;
+          case 'vandalismo':
+            categoryLabel = 'Vandalismo';
+            break;
+          case 'pulizia':
+            categoryLabel = 'Pulizia';
+            break;
+          case 'sicurezza':
+            categoryLabel = 'Sicurezza';
+            break;
+          case 'altro':
+            categoryLabel = 'Altro';
+            break;
+        }
+
+        // Parsa la data
+        DateTime createdAt;
+        if (data['createdAt'] != null) {
+          if (data['createdAt'] is String) {
+            createdAt = DateTime.tryParse(data['createdAt'] as String) ?? DateTime.now();
+          } else {
+            createdAt = DateTime.now();
+          }
+        } else {
+          createdAt = DateTime.now();
+        }
+
+        return Report(
+          id: data['id'] as String? ?? '',
+          lockerId: data['lockerId'] as String? ?? '',
+          cellId: data['cellaId'] as String?,
+          category: category,
+          categoryLabel: categoryLabel,
+          description: data['description'] as String? ?? '',
+          createdAt: createdAt,
+          status: status,
+          photoUrl: data['photoUrl'] as String?,
+          statusHistory: const [], // Il backend non restituisce lo storico per ora
+        );
+      }).toList();
+
+      setState(() {
+        _allReports = reports;
+        _filteredReports = reports;
+      });
+    } catch (e) {
+      print('Errore durante il caricamento delle segnalazioni: $e');
+      // In caso di errore, usa i mock come fallback
+      if (mounted) {
+        setState(() {
+          _allReports = mockReports;
+          _filteredReports = mockReports;
+        });
+        showCupertinoDialog(
+          context: context,
+          builder: (context) => CupertinoAlertDialog(
+            title: const Text('Errore'),
+            content: Text('Impossibile caricare le segnalazioni dal server. Usando dati locali.\n\nErrore: ${e.toString()}'),
+            actions: [
+              CupertinoDialogAction(
+                child: const Text('OK'),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ],
+          ),
+        );
+      }
+    }
   }
 
-  void _changeReportStatus(Report report) {
+  Future<void> _changeReportStatus(Report report) async {
     // Se è già conclusa, non può cambiare stato
     if (report.status == ReportStatus.conclusa) {
       return;
     }
 
     final nextStatus = report.status.nextStatus;
-    final operatorName = 'Operatore'; // TODO: Recuperare dal login
     
-    setState(() {
-      // Trova il report nella lista e aggiorna lo stato
-      final index = _allReports.indexWhere((r) => r.id == report.id);
-      if (index != -1) {
-        final updatedHistory = [
-          ...report.statusHistory,
-          StatusChangeHistory(
-            operatorName: operatorName,
-            changedAt: DateTime.now(),
-            fromStatus: report.status,
-            toStatus: nextStatus,
-          ),
-        ];
-        
-        final updatedReport = report.copyWith(
-          status: nextStatus,
-          statusHistory: updatedHistory,
-        );
-        
-        _allReports[index] = updatedReport;
-        _applyFilters();
+    // Mappa lo stato dal frontend al backend
+    String statusBackend;
+    switch (nextStatus) {
+      case ReportStatus.inSospeso:
+        statusBackend = 'aperta';
+        break;
+      case ReportStatus.visionata:
+        statusBackend = 'in_analisi';
+        break;
+      case ReportStatus.inManutenzione:
+        statusBackend = 'in_lavorazione';
+        break;
+      case ReportStatus.conclusa:
+        statusBackend = 'risolta';
+        break;
+    }
+
+    try {
+      final result = await ReportService.updateReportStatus(
+        reportId: report.id,
+        status: statusBackend,
+      );
+
+      if (result['success'] == true) {
+        setState(() {
+          final index = _allReports.indexWhere((r) => r.id == report.id);
+          if (index != -1) {
+            final updatedReport = report.copyWith(
+              status: nextStatus,
+            );
+            
+            _allReports[index] = updatedReport;
+            _applyFilters();
+          }
+        });
+      } else {
+        if (mounted) {
+          showCupertinoDialog(
+            context: context,
+            builder: (context) => CupertinoAlertDialog(
+              title: const Text('Errore'),
+              content: Text(result['error'] ?? 'Impossibile aggiornare lo stato della segnalazione. Riprova più tardi.'),
+              actions: [
+                CupertinoDialogAction(
+                  child: const Text('OK'),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
+            ),
+          );
+        }
       }
-    });
+    } catch (e) {
+      if (mounted) {
+        showCupertinoDialog(
+          context: context,
+          builder: (context) => CupertinoAlertDialog(
+            title: const Text('Errore'),
+            content: Text('Errore durante l\'aggiornamento: ${e.toString()}'),
+            actions: [
+              CupertinoDialogAction(
+                child: const Text('OK'),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ],
+          ),
+        );
+      }
+    }
   }
 
   void _onSearchChanged() {

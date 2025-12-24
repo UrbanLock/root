@@ -46,22 +46,37 @@ async function formatAdminReportResponse(segnalazione) {
 
   // Popola utente
   if (segnalazione.utenteId) {
-    try {
-      // Converti a ObjectId se necessario
-      const userObjectId = segnalazione.utenteId instanceof mongoose.Types.ObjectId
-        ? segnalazione.utenteId
-        : new mongoose.Types.ObjectId(segnalazione.utenteId);
-      
-      const user = await User.findById(userObjectId).lean();
-      if (user) {
-        response.userName = user.nome;
-        response.userSurname = user.cognome;
-        response.userEmail = user.email || null;
-        response.userPhone = user.telefono || null;
+    let user = null;
+    const utenteIdValue = segnalazione.utenteId;
+    
+    // Se è un ObjectId, prova a cercare per _id
+    if (utenteIdValue instanceof mongoose.Types.ObjectId) {
+      try {
+        user = await User.findById(utenteIdValue).lean();
+      } catch (e) {
+        // Se fallisce, ignora
       }
-    } catch (error) {
-      logger.warn(`Errore popolamento utente per segnalazione: ${error.message}`);
-      // Continua senza dati utente
+    }
+    
+    // Se non trovato e utenteId è una stringa (come "USR-001"), cerca per il campo utenteId
+    if (!user && typeof utenteIdValue === 'string') {
+      user = await User.findOne({ utenteId: utenteIdValue }).lean();
+    }
+    
+    // Se ancora non trovato, prova a convertire in ObjectId
+    if (!user && mongoose.Types.ObjectId.isValid(utenteIdValue)) {
+      try {
+        user = await User.findById(utenteIdValue).lean();
+      } catch (e) {
+        // Ignora
+      }
+    }
+    
+    if (user) {
+      response.userName = user.nome;
+      response.userSurname = user.cognome;
+      response.userEmail = user.email || null;
+      response.userPhone = user.telefono || null;
     }
   }
 
@@ -77,11 +92,42 @@ async function formatAdminReportResponse(segnalazione) {
 
   // Popola operatore se presente
   if (segnalazione.operatoreAssegnatoId) {
-    const operatore = await User.findById(
-      segnalazione.operatoreAssegnatoId
-    ).lean();
+    let operatore = null;
+    const operatoreIdValue = segnalazione.operatoreAssegnatoId;
+    
+    // Se è un ObjectId, prova a cercare per _id
+    if (operatoreIdValue instanceof mongoose.Types.ObjectId) {
+      try {
+        operatore = await User.findById(operatoreIdValue).lean();
+      } catch (e) {
+        // Se fallisce, ignora
+      }
+    }
+    
+    // Se non trovato, potrebbe essere una stringa (come "OP-002")
+    // In questo caso, cerca nella collezione Operatore
+    if (!operatore) {
+      try {
+        const Operatore = mongoose.model('Operatore');
+        // Prova a cercare per operatoreId (campo stringa)
+        if (typeof operatoreIdValue === 'string') {
+          operatore = await Operatore.findOne({ operatoreId: operatoreIdValue }).lean();
+        }
+        // Se non trovato, prova a convertire in ObjectId e cercare per _id
+        if (!operatore && mongoose.Types.ObjectId.isValid(operatoreIdValue)) {
+          try {
+            operatore = await Operatore.findById(operatoreIdValue).lean();
+          } catch (e) {
+            // Ignora
+          }
+        }
+      } catch (e) {
+        logger.warn(`Errore ricerca operatore per segnalazione: ${e.message}`);
+      }
+    }
+    
     if (operatore) {
-      response.assignedOperatorName = `${operatore.nome} ${operatore.cognome}`;
+      response.assignedOperatorName = `${operatore.nome || ''} ${operatore.cognome || ''}`.trim() || 'Operatore';
     }
   }
 
@@ -432,9 +478,22 @@ export async function updateStatus(req, res, next) {
     // Crea notifica per utente se segnalazione risolta/chiusa
     if (stato === 'risolta' || stato === 'chiusa') {
       try {
-        const operatore = await User.findById(operatoreId).lean();
+        // Cerca l'operatore - potrebbe essere nella collezione User o Operatore
+        let operatore = null;
+        try {
+          operatore = await User.findById(operatoreId).lean();
+        } catch (e) {
+          // Se fallisce, prova nella collezione Operatore
+          try {
+            const Operatore = mongoose.model('Operatore');
+            operatore = await Operatore.findById(operatoreId).lean();
+          } catch (e2) {
+            // Ignora
+          }
+        }
+        
         const operatoreName = operatore
-          ? `${operatore.nome} ${operatore.cognome}`
+          ? `${operatore.nome || ''} ${operatore.cognome || ''}`.trim() || 'Operatore'
           : 'Operatore';
 
         const titolo = `Segnalazione ${stato === 'risolta' ? 'risolta' : 'chiusa'}`;

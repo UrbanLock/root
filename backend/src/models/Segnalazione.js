@@ -63,8 +63,7 @@ const segnalazioneSchema = new mongoose.Schema(
       default: null,
     },
     operatoreAssegnatoId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
+      type: mongoose.Schema.Types.Mixed, // Accetta sia ObjectId che String
       default: null,
       index: true,
     },
