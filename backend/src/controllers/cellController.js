@@ -83,7 +83,6 @@ async function formatNoleggioAsActiveCell(noleggio) {
     startTime: noleggio.dataInizio,
     endTime: noleggio.dataFine || null,
     type: TIPO_MAPPING[noleggio.tipo] || 'deposited',
-    cost: noleggio.costo ?? 0,
   };
 }
 

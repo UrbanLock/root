@@ -15,7 +15,6 @@ class ActiveCell {
   final DateTime startTime;
   final DateTime? endTime; // Null se non ha scadenza
   final CellUsageType type;
-  final double? cost; // Costo iniziale stimato (solo per depositi, opzionale)
   
   ActiveCell({
     required this.id,
@@ -27,7 +26,6 @@ class ActiveCell {
     required this.startTime,
     this.endTime,
     required this.type,
-    this.cost,
   });
 
   /// Crea un'istanza da JSON restituito dal backend.
@@ -48,10 +46,6 @@ class ActiveCell {
         break;
     }
 
-    final rawCost = json['cost'];
-    final parsedCost =
-        rawCost is num ? rawCost.toDouble() : null;
-
     return ActiveCell(
       id: json['id'] as String,
       lockerId: json['lockerId'] as String,
@@ -64,7 +58,6 @@ class ActiveCell {
           ? DateTime.parse(json['endTime'] as String)
           : null,
       type: parsedType,
-      cost: parsedCost,
     );
   }
 
@@ -80,7 +73,6 @@ class ActiveCell {
       'startTime': startTime.toIso8601String(),
       'endTime': endTime?.toIso8601String(),
       'type': type.toString().split('.').last,
-      if (cost != null) 'cost': cost,
     };
   }
   
