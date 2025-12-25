@@ -1,13 +1,16 @@
 import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import 'package:location/location.dart';
 import 'package:app/core/theme/theme_manager.dart';
 import 'package:app/core/styles/app_colors.dart';
 import 'package:app/core/styles/app_text_styles.dart';
 import 'package:app/core/notifications/notification_service.dart';
 import 'package:app/core/di/app_dependencies.dart';
 import 'package:app/features/cells/domain/models/active_cell.dart';
+import 'package:app/features/cells/domain/repositories/cell_repository.dart';
 import 'package:app/features/lockers/domain/models/locker_cell.dart';
+import 'package:app/features/lockers/domain/models/locker.dart';
 import 'package:app/features/reports/presentation/pages/report_issue_page.dart';
 
 /// Pagina per aprire una cella tramite Bluetooth
@@ -57,6 +60,15 @@ class _OpenCellPageState extends State<OpenCellPage> {
   bool _waitingForBluetoothActivation = false; // Flag per evitare pulsante "Riprova" durante attesa
   String _statusMessage = 'Preparazione...';
   
+  // Info Bluetooth (caricate dal backend)
+  String? _bluetoothUuid;
+  String? _bluetoothName;
+  bool _isLoadingBluetoothInfo = false;
+  
+  // Accoppiamento Bluetooth (verificato dal backend)
+  String? _pairingId; // ID accoppiamento verificato dal backend
+  bool _isVerifyingPairing = false; // Flag per verifica in corso
+  
   // Stati apertura/chiusura cella
   bool _cellOpened = false;
   bool _waitingForDoorClose = false;
@@ -65,11 +77,49 @@ class _OpenCellPageState extends State<OpenCellPage> {
   StreamSubscription<BluetoothAdapterState>? _bluetoothStateSubscription;
   StreamSubscription<List<ScanResult>>? _scanResultsSubscription;
   Timer? _doorCloseTimer;
+  final Location _location = Location();
 
   @override
   void initState() {
     super.initState();
-    _checkBluetoothAndStartScan();
+    _loadBluetoothInfo();
+  }
+  
+  /// Carica le informazioni Bluetooth del locker dal backend
+  Future<void> _loadBluetoothInfo() async {
+    setState(() {
+      _isLoadingBluetoothInfo = true;
+      _statusMessage = 'Caricamento informazioni Bluetooth...';
+    });
+    
+    try {
+      final lockerRepo = AppDependencies.lockerRepository;
+      if (lockerRepo == null) {
+        setState(() {
+          _statusMessage = 'Servizio locker non disponibile';
+          _isLoadingBluetoothInfo = false;
+        });
+        return;
+      }
+      
+      final bluetoothInfo = await lockerRepo.getLockerBluetoothInfo(widget.lockerId);
+      
+      setState(() {
+        _bluetoothUuid = bluetoothInfo['bluetoothUuid'] as String?;
+        _bluetoothName = bluetoothInfo['bluetoothName'] as String?;
+        _isLoadingBluetoothInfo = false;
+      });
+      
+      // Dopo aver caricato le info, avvia verifica Bluetooth
+      _checkBluetoothAndStartScan();
+    } catch (e) {
+      setState(() {
+        _statusMessage = 'Errore nel caricamento: ${e.toString()}';
+        _isLoadingBluetoothInfo = false;
+      });
+      // Anche in caso di errore, prova comunque la scansione (fallback)
+      _checkBluetoothAndStartScan();
+    }
   }
 
   @override
@@ -207,49 +257,193 @@ class _OpenCellPageState extends State<OpenCellPage> {
         _lockerConnected = false;
       });
 
-      await FlutterBluePlus.startScan(timeout: const Duration(seconds: 10));
-
-      _scanResultsSubscription = FlutterBluePlus.scanResults.listen((results) {
-        if (!_lockerFound && _isScanning) {
-          // ⚠️ SOLO PER TESTING: Simula ritrovamento dopo 2 secondi
-          // IN PRODUZIONE: Verificare UUID o nome del dispositivo
-          Future.delayed(const Duration(seconds: 2), () {
-            if (mounted && _isScanning && !_lockerFound) {
-              setState(() {
-                _lockerFound = true;
-                _lockerConnected = true;
-                _isScanning = false;
-                _statusMessage = 'Locker trovato e connesso!';
-              });
-              FlutterBluePlus.stopScan();
-              
-              // Se è per deposito (onVerificationComplete presente), chiama il callback
-              if (widget.onVerificationComplete != null) {
-                Future.delayed(const Duration(milliseconds: 500), () {
-                  if (mounted) {
-                    widget.onVerificationComplete!();
-                  }
-                });
-              }
-            }
+      // ============================================================
+      // ⚠️ MODALITÀ TESTING: Simula ritrovamento dispositivo
+      // ============================================================
+      // Poiché i locker fisici non esistono ancora, simuliamo il
+      // ritrovamento del dispositivo Bluetooth dopo un breve delay.
+      // Questo permette di testare il flusso completo senza hardware.
+      // 
+      // TODO: RIMUOVERE QUESTO CODICE quando i locker fisici saranno disponibili
+      // e sostituire con la scansione Bluetooth reale (vedi codice commentato sotto)
+      // ============================================================
+      
+      // Simula ritrovamento dopo 2 secondi (per testing)
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted && _isScanning && !_lockerFound) {
+          // Usa l'UUID ricevuto dal backend come dispositivo "trovato"
+          final simulatedDeviceId = _bluetoothUuid ?? '00:00:00:00:00:00';
+          final simulatedDeviceName = _bluetoothName ?? 'Locker-Simulato';
+          final simulatedRssi = -45; // RSSI simulato (buon segnale)
+          
+          FlutterBluePlus.stopScan();
+          setState(() {
+            _lockerFound = true;
+            _isScanning = false;
+            _statusMessage = 'Dispositivo trovato. Verifica in corso...';
           });
+          
+          // Verifica accoppiamento con backend usando dati simulati
+          _verifyPairingWithBackend(
+            bluetoothUuid: simulatedDeviceId,
+            deviceName: simulatedDeviceName,
+            rssi: simulatedRssi,
+          );
         }
       });
 
-      // Timeout dopo 10 secondi
-      Future.delayed(const Duration(seconds: 10), () {
+      // ============================================================
+      // CODICE REALE (commentato per testing - da riattivare quando
+      // i locker fisici saranno disponibili):
+      // ============================================================
+      /*
+      await FlutterBluePlus.startScan(timeout: const Duration(seconds: 15));
+
+      _scanResultsSubscription?.cancel();
+      _scanResultsSubscription = FlutterBluePlus.scanResults.listen((results) {
+        if (!_lockerFound && _isScanning && mounted) {
+          // Cerca il locker tramite UUID o nome Bluetooth
+          for (final result in results) {
+            final deviceId = result.device.remoteId.toString();
+            final deviceName = result.device.platformName;
+            
+            // Verifica UUID (priorità) o nome Bluetooth
+            bool isMatch = false;
+            if (_bluetoothUuid != null && _bluetoothUuid!.isNotEmpty) {
+              // Confronta UUID (rimuovi eventuali trattini per compatibilità)
+              final normalizedUuid = _bluetoothUuid!.replaceAll('-', '').toLowerCase();
+              final normalizedDeviceId = deviceId.replaceAll('-', '').toLowerCase();
+              isMatch = normalizedDeviceId.contains(normalizedUuid) || 
+                       normalizedUuid.contains(normalizedDeviceId);
+            }
+            
+            // Fallback: verifica nome Bluetooth se UUID non disponibile
+            if (!isMatch && _bluetoothName != null && deviceName.isNotEmpty) {
+              isMatch = deviceName.toLowerCase().contains(_bluetoothName!.toLowerCase()) ||
+                       _bluetoothName!.toLowerCase().contains(deviceName.toLowerCase());
+            }
+            
+            if (isMatch) {
+              // Dispositivo trovato localmente - ora verifica con backend
+              FlutterBluePlus.stopScan();
+              setState(() {
+                _lockerFound = true;
+                _isScanning = false;
+                _statusMessage = 'Dispositivo trovato. Verifica in corso...';
+              });
+              
+              // Verifica accoppiamento con backend
+              _verifyPairingWithBackend(
+                bluetoothUuid: deviceId,
+                deviceName: deviceName,
+                rssi: result.rssi,
+              );
+              return;
+            }
+          }
+        }
+      });
+
+      // Timeout dopo 15 secondi
+      Future.delayed(const Duration(seconds: 15), () {
         if (mounted && _isScanning && !_lockerFound) {
           setState(() {
             _isScanning = false;
-            _statusMessage = 'Locker non trovato nelle vicinanze';
+            _statusMessage = 'Locker non trovato nelle vicinanze. Assicurati di essere vicino al locker.';
           });
           FlutterBluePlus.stopScan();
         }
       });
+      */
+      // ============================================================
     } catch (e) {
       setState(() {
-        _statusMessage = 'Errore durante la ricerca: $e';
+        _statusMessage = 'Errore durante la ricerca: ${e.toString()}';
         _isScanning = false;
+      });
+    }
+  }
+  
+  /// Verifica accoppiamento Bluetooth con backend
+  Future<void> _verifyPairingWithBackend({
+    required String bluetoothUuid,
+    String? deviceName,
+    int? rssi,
+  }) async {
+    if (_isVerifyingPairing) return; // Evita chiamate multiple
+    
+    final repository = AppDependencies.cellRepository;
+    if (repository == null) {
+      setState(() {
+        _statusMessage = 'Servizio celle non disponibile';
+      });
+      return;
+    }
+
+    setState(() {
+      _isVerifyingPairing = true;
+      _statusMessage = 'Verifica accoppiamento con backend...';
+    });
+
+    try {
+      // Ottieni geolocalizzazione (opzionale, per verifica prossimità)
+      Map<String, dynamic>? geolocation;
+      try {
+        final locationData = await _location.getLocation();
+        if (locationData.latitude != null && locationData.longitude != null) {
+          geolocation = {
+            'lat': locationData.latitude!,
+            'lng': locationData.longitude!,
+          };
+        }
+      } catch (_) {
+        // Ignora errori geolocalizzazione (opzionale)
+      }
+
+      // Chiama backend per verificare accoppiamento
+      final result = await repository.verifyBluetoothPairing(
+        lockerId: widget.lockerId,
+        cellId: widget.cell.id,
+        bluetoothUuid: bluetoothUuid,
+        bluetoothRssi: rssi,
+        deviceName: deviceName,
+        geolocation: geolocation,
+      );
+
+      if (result.verified && result.pairingId != null && result.cellAssigned != null) {
+        // Accoppiamento verificato con successo!
+        setState(() {
+          _pairingId = result.pairingId;
+          _activeCell = result.cellAssigned;
+          _lockerConnected = true;
+          _isVerifyingPairing = false;
+          _statusMessage = 'Locker connesso! Pronto per aprire.';
+        });
+
+        // Se è per deposito, chiama callback
+        if (widget.onVerificationComplete != null) {
+          Future.delayed(const Duration(milliseconds: 500), () {
+            if (mounted) {
+              widget.onVerificationComplete!();
+            }
+          });
+        }
+      } else {
+        // Verifica fallita
+        setState(() {
+          _isVerifyingPairing = false;
+          _lockerConnected = false;
+          _lockerFound = false;
+          _statusMessage = result.message ?? 
+              'Verifica accoppiamento fallita. ${result.reason ?? "Riprova."}';
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _isVerifyingPairing = false;
+        _lockerConnected = false;
+        _lockerFound = false;
+        _statusMessage = 'Errore nella verifica: ${e.toString()}';
       });
     }
   }
@@ -271,7 +465,14 @@ class _OpenCellPageState extends State<OpenCellPage> {
 
   /// Apre la cella e attende la chiusura
   Future<void> _openCell() async {
-    // Richiedi cella e apri tramite backend
+    // Verifica che l'accoppiamento sia stato verificato
+    if (_pairingId == null || _activeCell == null) {
+      setState(() {
+        _statusMessage = 'Accoppiamento non verificato. Riprova.';
+      });
+      return;
+    }
+    
     final repository = AppDependencies.cellRepository;
     if (repository == null) {
       setState(() {
@@ -281,43 +482,41 @@ class _OpenCellPageState extends State<OpenCellPage> {
     }
 
     try {
-      if (_activeCell == null) {
-        // Richiedi una cella di tipo prestito
-        final requested = await repository.requestCell(
-          widget.lockerId,
-          type: 'borrow',
-        );
-        _activeCell = requested;
-      }
+      setState(() {
+        _statusMessage = 'Apertura cella in corso...';
+      });
+      
+      // Usa pairingId per aprire la cella (backend verifica tutto)
+      await repository.openCellWithPairing(
+        pairingId: _pairingId!,
+        cellId: _activeCell!.cellId,
+        lockerId: widget.lockerId,
+      );
+      
+      setState(() {
+        _cellOpened = true;
+        _waitingForDoorClose = true;
+        _statusMessage = 'Cella aperta. Prendi l\'oggetto e chiudi lo sportello.';
+      });
 
-      await repository.openCell(_activeCell!.cellId);
+      // ⚠️ SOLO PER TESTING: Timer di 3 secondi per simulare chiusura
+      // IN PRODUZIONE: Rilevare chiusura tramite sensore Bluetooth/backend che invierà segnale
+      // Il backend riceverà il segnale dal locker fisico e notificherà l'app
+      _doorCloseTimer?.cancel();
+      _doorCloseTimer = Timer(const Duration(seconds: 3), () {
+        debugPrint('⏱️ [TIMER] Timer scaduto - chiusura simulata');
+        if (mounted && _waitingForDoorClose) {
+          _handleDoorClosed();
+        } else {
+          debugPrint('⚠️ [TIMER] Widget non montato o non più in attesa');
+        }
+      });
+      debugPrint('✅ [TIMER] Timer di 3 secondi avviato per simulare chiusura');
     } catch (e) {
       setState(() {
-        _statusMessage = 'Errore nell\'apertura della cella: $e';
+        _statusMessage = 'Errore nell\'apertura della cella: ${e.toString()}';
       });
-      return;
     }
-
-    setState(() {
-      _cellOpened = true;
-      _waitingForDoorClose = true;
-      _statusMessage = 'Cella aperta. Prendi l\'oggetto e chiudi lo sportello.';
-    });
-
-
-    // ⚠️ SOLO PER TESTING: Timer di 3 secondi per simulare chiusura
-    // IN PRODUZIONE: Rilevare chiusura tramite sensore Bluetooth/backend che invierà segnale
-    // Il backend riceverà il segnale dal locker fisico e notificherà l'app
-    _doorCloseTimer?.cancel();
-    _doorCloseTimer = Timer(const Duration(seconds: 3), () {
-      debugPrint('⏱️ [TIMER] Timer scaduto - chiusura simulata');
-      if (mounted && _waitingForDoorClose) {
-        _handleDoorClosed();
-      } else {
-        debugPrint('⚠️ [TIMER] Widget non montato o non più in attesa');
-      }
-    });
-    debugPrint('✅ [TIMER] Timer di 3 secondi avviato per simulare chiusura');
   }
 
   /// Gestisce la chiusura dello sportello
@@ -430,6 +629,9 @@ class _OpenCellPageState extends State<OpenCellPage> {
                     else
                       // Schermata locker connesso - pulsante apri (per prestito)
                       _buildConnectedScreen(isDark),
+                  ] else if (_isLoadingBluetoothInfo || _isVerifyingPairing) ...[
+                    // Schermata caricamento info Bluetooth o verifica accoppiamento
+                    _buildLoadingScreen(isDark),
                   ] else ...[
                     // Schermata ricerca Bluetooth
                     _buildBluetoothScreen(isDark),
@@ -521,24 +723,32 @@ class _OpenCellPageState extends State<OpenCellPage> {
   }
 
   Widget _buildConnectedScreen(bool isDark) {
+    final isReady = _activeCell != null;
+    
     return Column(
       children: [
         Container(
           width: 120,
           height: 120,
           decoration: BoxDecoration(
-            color: AppColors.success(isDark).withOpacity(0.1),
+            color: isReady 
+                ? AppColors.success(isDark).withOpacity(0.1)
+                : AppColors.primary(isDark).withOpacity(0.1),
             shape: BoxShape.circle,
           ),
           child: Icon(
-            CupertinoIcons.check_mark_circled_solid,
+            isReady 
+                ? CupertinoIcons.check_mark_circled_solid
+                : CupertinoIcons.hourglass,
             size: 60,
-            color: AppColors.success(isDark),
+            color: isReady 
+                ? AppColors.success(isDark)
+                : AppColors.primary(isDark),
           ),
         ),
         const SizedBox(height: 32),
         Text(
-          'Locker connesso!',
+          isReady ? 'Locker connesso!' : 'Assegnazione cella...',
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.w700,
@@ -548,7 +758,9 @@ class _OpenCellPageState extends State<OpenCellPage> {
         ),
         const SizedBox(height: 16),
         Text(
-          'Pronto per aprire la cella',
+          isReady 
+              ? 'Pronto per aprire la cella'
+              : _statusMessage,
           style: TextStyle(
             fontSize: 15,
             color: AppColors.textSecondary(isDark),
@@ -556,21 +768,42 @@ class _OpenCellPageState extends State<OpenCellPage> {
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 40),
-        SizedBox(
-          width: double.infinity,
-          child: CupertinoButton.filled(
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            borderRadius: BorderRadius.circular(12),
-            onPressed: _openCell,
-            child: const Text(
-              'Apri cella',
-              style: TextStyle(
-                color: CupertinoColors.white,
-                fontWeight: FontWeight.w600,
-                fontSize: 16,
+        if (isReady)
+          SizedBox(
+            width: double.infinity,
+            child: CupertinoButton.filled(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              borderRadius: BorderRadius.circular(12),
+              onPressed: _openCell,
+              child: const Text(
+                'Apri cella',
+                style: TextStyle(
+                  color: CupertinoColors.white,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 16,
+                ),
               ),
             ),
+          )
+        else
+          const CupertinoActivityIndicator(radius: 20),
+      ],
+    );
+  }
+  
+  Widget _buildLoadingScreen(bool isDark) {
+    return Column(
+      children: [
+        const CupertinoActivityIndicator(radius: 20),
+        const SizedBox(height: 32),
+        Text(
+          _statusMessage,
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+            color: AppColors.text(isDark),
           ),
+          textAlign: TextAlign.center,
         ),
       ],
     );

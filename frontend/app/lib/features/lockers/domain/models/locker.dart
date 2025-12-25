@@ -14,6 +14,8 @@ class Locker {
   final String? description;
   final List<LockerCell>? cells; // Lista delle celle disponibili (opzionale, caricata on-demand)
   final LockerCellStats? cellStats; // Statistiche delle celle per tipo
+  final String? bluetoothUuid; // UUID del dispositivo Bluetooth del locker
+  final String? bluetoothName; // Nome del dispositivo Bluetooth (opzionale)
 
   const Locker({
     required this.id,
@@ -26,6 +28,8 @@ class Locker {
     this.description,
     this.cells,
     this.cellStats,
+    this.bluetoothUuid,
+    this.bluetoothName,
   });
 
   double get availabilityPercentage =>
@@ -60,6 +64,8 @@ class Locker {
       availableCells: json['availableCells'] as int? ?? 0,
       isActive: json['isActive'] as bool? ?? true,
       description: json['description'] as String?,
+      bluetoothUuid: json['bluetoothUuid'] as String?,
+      bluetoothName: json['bluetoothName'] as String?,
     );
   }
 }

@@ -46,6 +46,12 @@ class ApiConfig {
 
   /// Endpoint segnalazioni
   static const String reportsEndpoint = '/reports';
+  
+  /// Endpoint per ottenere info Bluetooth di un locker
+  static const String lockerBluetoothInfoEndpoint = '/lockers/:id/bluetooth-info';
+  
+  /// Endpoint per verificare accoppiamento Bluetooth
+  static const String verifyBluetoothPairingEndpoint = '/cells/verify-bluetooth-pairing';
 }
 
 

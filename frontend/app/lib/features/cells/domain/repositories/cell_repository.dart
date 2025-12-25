@@ -66,6 +66,69 @@ abstract class CellRepository {
   /// **Body**: { "cell_id": "...", "photo": "base64..." (opzionale) }
   /// **Autenticazione**: Richiesta
   Future<void> returnCell(String cellId, {String? photoBase64});
+  
+  /// Verifica accoppiamento Bluetooth e assegna cella
+  /// 
+  /// **Endpoint backend**: POST /api/v1/cells/verify-bluetooth-pairing
+  /// **Body**: {
+  ///   "lockerId": "...",
+  ///   "cellId": "...",
+  ///   "bluetoothUuid": "...",
+  ///   "bluetoothRssi": -45 (opzionale),
+  ///   "deviceName": "..." (opzionale),
+  ///   "geolocation": { "lat": ..., "lng": ... } (opzionale)
+  /// }
+  /// **Autenticazione**: Richiesta
+  /// **Risposta**: { "verified": true, "pairingId": "...", "cellAssigned": { ... } }
+  Future<BluetoothPairingResult> verifyBluetoothPairing({
+    required String lockerId,
+    required String cellId,
+    required String bluetoothUuid,
+    int? bluetoothRssi,
+    String? deviceName,
+    Map<String, dynamic>? geolocation,
+  });
+  
+  /// Apre una cella usando pairingId (modificato)
+  /// 
+  /// **Endpoint backend**: POST /api/v1/cells/open
+  /// **Body**: { "pairingId": "...", "cellId": "...", "lockerId": "..." }
+  /// **Autenticazione**: Richiesta
+  /// **Risposta**: { "success": true, "doorOpened": true }
+  Future<void> openCellWithPairing({
+    required String pairingId,
+    required String cellId,
+    required String lockerId,
+  });
+}
+
+/// Risultato della verifica accoppiamento Bluetooth
+class BluetoothPairingResult {
+  final bool verified;
+  final String? pairingId;
+  final ActiveCell? cellAssigned;
+  final String? reason;
+  final String? message;
+  
+  BluetoothPairingResult({
+    required this.verified,
+    this.pairingId,
+    this.cellAssigned,
+    this.reason,
+    this.message,
+  });
+  
+  factory BluetoothPairingResult.fromJson(Map<String, dynamic> json) {
+    return BluetoothPairingResult(
+      verified: json['verified'] as bool? ?? false,
+      pairingId: json['pairingId'] as String?,
+      cellAssigned: json['cellAssigned'] != null
+          ? ActiveCell.fromJson(json['cellAssigned'] as Map<String, dynamic>)
+          : null,
+      reason: json['reason'] as String?,
+      message: json['message'] as String?,
+    );
+  }
 }
 
 

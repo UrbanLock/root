@@ -86,6 +86,18 @@ const lockerSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
+    // Campi Bluetooth per verifica prossimità
+    bluetoothUuid: {
+      type: String,
+      default: null,
+      trim: true,
+      index: true,
+    },
+    bluetoothName: {
+      type: String,
+      default: null,
+      trim: true,
+    },
   },
   {
     timestamps: false, // Usiamo dataCreazione manuale

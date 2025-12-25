@@ -208,39 +208,85 @@ export async function requestCell(req, res, next) {
  * POST /api/v1/cells/open
  * Sbloccare cella (apertura vano)
  * RF3: Scansione QR/Bluetooth, geolocalizzazione attiva, gestione errori
+ * Supporta sia cell_id (legacy) che pairingId (nuovo flusso backend-centric)
  */
 export async function openCell(req, res, next) {
   try {
-    const { cell_id, photo } = req.body;
+    const { cell_id, pairingId, cellId, lockerId, photo } = req.body;
     const userId = req.user.userId; // Da middleware auth
 
-    if (!cell_id) {
-      throw new ValidationError('cell_id è obbligatorio');
+    let noleggio;
+
+    // Nuovo flusso: verifica tramite pairingId (backend-centric)
+    if (pairingId) {
+      if (!cellId || !lockerId) {
+        throw new ValidationError(
+          'pairingId richiede anche cellId e lockerId'
+        );
+      }
+
+      // Trova Noleggio tramite pairingId (che è il noleggioId)
+      noleggio = await Noleggio.findOne({
+        noleggioId: pairingId,
+        utenteId: userId,
+        cellaId: cellId,
+        lockerId: lockerId,
+      });
+
+      if (!noleggio) {
+        throw new NotFoundError(
+          `Accoppiamento non trovato per pairingId ${pairingId}`
+        );
+      }
+
+      // Verifica che pairingId sia ancora valido e attivo
+      if (noleggio.stato !== 'attivo') {
+        throw new ValidationError(
+          `Accoppiamento ${pairingId} non è più attivo (stato: ${noleggio.stato})`
+        );
+      }
+
+      // Verifica che la cella sia ancora assegnata all'utente
+      const cell = await Cell.findOne({ cellaId: cellId });
+      if (!cell || cell.stato !== 'occupata') {
+        throw new ValidationError(
+          `Cella ${cellId} non è più assegnata all'utente`
+        );
+      }
+    } else {
+      // Flusso legacy: verifica tramite cell_id
+      if (!cell_id) {
+        throw new ValidationError(
+          'cell_id o pairingId è obbligatorio'
+        );
+      }
+
+      // Trova Noleggio per cellaId e utenteId (verifica proprietà)
+      noleggio = await Noleggio.findOne({
+        cellaId: cell_id,
+        utenteId: userId,
+      });
+
+      if (!noleggio) {
+        throw new NotFoundError(
+          `Noleggio non trovato per cella ${cell_id} e utente corrente`
+        );
+      }
+
+      // Verifica stato "attivo"
+      if (noleggio.stato !== 'attivo') {
+        throw new ValidationError(
+          `Noleggio ${noleggio.noleggioId} non è attivo (stato: ${noleggio.stato})`
+        );
+      }
     }
 
-    // Trova Noleggio per cellaId e utenteId (verifica proprietà)
-    const noleggio = await Noleggio.findOne({
-      cellaId: cell_id,
-      utenteId: userId,
-    });
-
-    if (!noleggio) {
-      throw new NotFoundError(
-        `Noleggio non trovato per cella ${cell_id} e utente corrente`
-      );
-    }
-
-    // Verifica stato "attivo"
-    if (noleggio.stato !== 'attivo') {
-      throw new ValidationError(
-        `Noleggio ${noleggio.noleggioId} non è attivo (stato: ${noleggio.stato})`
-      );
-    }
+    const cell_id_final = pairingId ? cellId : cell_id;
 
     // Trova Cell per verificare richiede_foto
-    const cell = await Cell.findOne({ cellaId: cell_id });
+    const cell = await Cell.findOne({ cellaId: cell_id_final });
     if (!cell) {
-      throw new NotFoundError(`Cella ${cell_id} non trovata`);
+      throw new NotFoundError(`Cella ${cell_id_final} non trovata`);
     }
 
     // RF3: Verifica foto se richiesta
@@ -283,7 +329,7 @@ export async function openCell(req, res, next) {
     await noleggio.save();
 
     logger.info(
-      `Cella aperta: ${cell_id} - Noleggio: ${noleggio.noleggioId}, Utente: ${userId}`
+      `Cella aperta: ${cell_id_final} - Noleggio: ${noleggio.noleggioId}, Utente: ${userId}${pairingId ? ` (pairingId: ${pairingId})` : ''}`
     );
 
     // Estrai dati QR code (può essere stringa o oggetto con data/image)
@@ -297,11 +343,12 @@ export async function openCell(req, res, next) {
     res.json({
       success: true,
       data: {
-        cell_id: cell_id,
+        cell_id: cell_id_final,
         door_opened: true,
         qrCode: qrCodeData,
         qrCodeImage: qrCodeImage, // Immagine base64 per visualizzazione
         bluetoothToken: noleggio.bluetoothToken,
+        message: 'Cella aperta con successo',
       },
     });
   } catch (error) {
@@ -549,6 +596,212 @@ export async function getHistory(req, res, next) {
   }
 }
 
+/**
+ * POST /api/v1/cells/verify-bluetooth-pairing
+ * Verifica accoppiamento Bluetooth e assegna cella
+ * RF3: Verifica prossimità e autorizzazione backend
+ */
+export async function verifyBluetoothPairing(req, res, next) {
+  try {
+    const {
+      lockerId,
+      cellId,
+      bluetoothUuid,
+      bluetoothRssi,
+      deviceName,
+      geolocation,
+    } = req.body;
+    const userId = req.user.userId; // Da middleware auth
+
+    // Validazione input
+    if (!lockerId) {
+      throw new ValidationError('lockerId è obbligatorio');
+    }
+    if (!cellId) {
+      throw new ValidationError('cellId è obbligatorio');
+    }
+    if (!bluetoothUuid) {
+      throw new ValidationError('bluetoothUuid è obbligatorio');
+    }
+
+    // 1. Verifica che locker esista e abbia UUID Bluetooth configurato
+    const locker = await Locker.findOne({ lockerId }).lean();
+    if (!locker) {
+      throw new NotFoundError(`Locker ${lockerId} non trovato`);
+    }
+
+    if (!locker.bluetoothUuid) {
+      throw new ValidationError(
+        `Locker ${lockerId} non ha UUID Bluetooth configurato`
+      );
+    }
+
+    // 2. Verifica che UUID corrisponda al locker
+    // Normalizza UUID (rimuovi trattini per confronto)
+    const normalizeUuid = (uuid) => uuid.replace(/-/g, '').toLowerCase();
+    const lockerUuidNormalized = normalizeUuid(locker.bluetoothUuid);
+    const receivedUuidNormalized = normalizeUuid(bluetoothUuid);
+
+    if (lockerUuidNormalized !== receivedUuidNormalized) {
+      // Verifica anche nome Bluetooth come fallback
+      const nameMatch =
+        locker.bluetoothName &&
+        deviceName &&
+        deviceName.toLowerCase().includes(locker.bluetoothName.toLowerCase());
+
+      if (!nameMatch) {
+        throw new ValidationError(
+          'UUID Bluetooth non corrisponde al locker richiesto'
+        );
+      }
+    }
+
+    // 3. Verifica prossimità tramite RSSI (opzionale ma consigliato)
+    // RSSI tipico: -30 a -90 dBm
+    // -30 a -50: molto vicino
+    // -50 a -70: vicino
+    // -70 a -90: lontano
+    if (bluetoothRssi !== undefined && bluetoothRssi !== null) {
+      const MAX_RSSI_THRESHOLD = -80; // Soglia massima (più negativo = più lontano)
+      if (bluetoothRssi < MAX_RSSI_THRESHOLD) {
+        throw new ValidationError(
+          'Dispositivo troppo distante dal locker. Avvicinati per continuare.'
+        );
+      }
+    }
+
+    // 4. Verifica prossimità tramite geolocalizzazione (opzionale)
+    if (geolocation && geolocation.lat && geolocation.lng) {
+      const lockerLat = locker.coordinate.lat;
+      const lockerLng = locker.coordinate.lng;
+      const userLat = geolocation.lat;
+      const userLng = geolocation.lng;
+
+      // Calcola distanza in metri (formula Haversine)
+      const R = 6371000; // Raggio Terra in metri
+      const dLat = ((userLat - lockerLat) * Math.PI) / 180;
+      const dLng = ((userLng - lockerLng) * Math.PI) / 180;
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos((lockerLat * Math.PI) / 180) *
+          Math.cos((userLat * Math.PI) / 180) *
+          Math.sin(dLng / 2) *
+          Math.sin(dLng / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      const distance = R * c; // Distanza in metri
+
+      const MAX_DISTANCE_METERS = 50; // Soglia massima: 50 metri
+      if (distance > MAX_DISTANCE_METERS) {
+        throw new ValidationError(
+          `Troppo distante dal locker (${Math.round(distance)}m). Avvicinati per continuare.`
+        );
+      }
+    }
+
+    // 5. Verifica che la cella esista e sia disponibile
+    const cell = await Cell.findOne({
+      cellaId: cellId,
+      lockerId: lockerId,
+    });
+
+    if (!cell) {
+      throw new NotFoundError(
+        `Cella ${cellId} non trovata nel locker ${lockerId}`
+      );
+    }
+
+    if (cell.stato !== 'libera') {
+      throw new ValidationError(
+        `Cella ${cellId} non è disponibile (stato: ${cell.stato})`
+      );
+    }
+
+    // 6. Verifica tipo cella (deve essere "prestito" per borrow)
+    const tipoMapping = {
+      borrow: 'prestito',
+      deposited: 'deposito',
+      pickup: 'ordini',
+    };
+
+    // Determina tipo dalla cella o dal body (priorità al body se presente)
+    const expectedType = req.body.type || 'borrow'; // Default borrow per prestito
+    const tipoDB = tipoMapping[expectedType] || 'prestito';
+
+    if (cell.tipo !== tipoDB) {
+      throw new ValidationError(
+        `Cella ${cellId} non è di tipo ${tipoDB} (tipo attuale: ${cell.tipo})`
+      );
+    }
+
+    // 7. Crea Noleggio (assegna cella)
+    const now = new Date();
+    const dataInizio = now;
+    const oraInizio = formatTime(now);
+
+    // Genera noleggioId
+    const noleggioId = await Noleggio.generateNoleggioId();
+
+    // Genera QR code e Bluetooth token
+    const qrCode = await Noleggio.generateQRCode(noleggioId, cellId, lockerId);
+    const bluetoothToken = Noleggio.generateBluetoothToken();
+
+    // Crea Noleggio
+    const noleggio = new Noleggio({
+      noleggioId,
+      utenteId: userId,
+      cellaId: cellId,
+      lockerId,
+      tipo: tipoDB,
+      stato: 'attivo',
+      dataInizio,
+      oraInizio,
+      costo: 0, // Prestito è gratuito
+      qrCode,
+      bluetoothToken,
+      geolocalizzazione: geolocation || null,
+    });
+
+    await noleggio.save();
+
+    // 8. Aggiorna Cell stato a "occupata"
+    cell.stato = 'occupata';
+    await cell.save();
+
+    // 9. Formatta come ActiveCell per frontend
+    const activeCell = await formatNoleggioAsActiveCell(noleggio);
+
+    logger.info(
+      `Accoppiamento Bluetooth verificato: ${noleggioId} - Utente: ${userId}, Locker: ${lockerId}, Cella: ${cellId}`
+    );
+
+    // 10. Restituisci risultato
+    res.status(201).json({
+      success: true,
+      data: {
+        verified: true,
+        pairingId: noleggioId, // Usa noleggioId come pairingId
+        cellAssigned: activeCell,
+        message: 'Accoppiamento verificato. Cella assegnata.',
+      },
+    });
+  } catch (error) {
+    // Se è un ValidationError o NotFoundError, restituisci formato standard
+    if (error.name === 'ValidationError' || error.name === 'NotFoundError') {
+      return res.status(400).json({
+        success: false,
+        data: {
+          verified: false,
+          reason: error.name === 'ValidationError' ? 'validation_error' : 'not_found',
+          message: error.message,
+        },
+      });
+    }
+
+    // Altrimenti passa all'error handler
+    next(error);
+  }
+}
+
 export default {
   requestCell,
   openCell,
@@ -556,5 +809,6 @@ export default {
   returnCell,
   getActiveCells,
   getHistory,
+  verifyBluetoothPairing,
 };
 

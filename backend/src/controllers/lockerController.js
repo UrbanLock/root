@@ -201,6 +201,8 @@ export async function getLockerById(req, res, next) {
       dataRipristino: locker.dataRipristino || null,
       online: locker.online !== undefined ? locker.online : true,
       dataCreazione: locker.dataCreazione,
+      bluetoothUuid: locker.bluetoothUuid || null,
+      bluetoothName: locker.bluetoothName || null,
     };
 
     logger.info(`Dettaglio locker: ${locker.lockerId}`);
@@ -308,6 +310,45 @@ export async function getLockerCells(req, res, next) {
 }
 
 /**
+ * GET /api/v1/lockers/:id/bluetooth-info
+ * Ottiene informazioni Bluetooth del locker per verifica accoppiamento
+ */
+export async function getLockerBluetoothInfo(req, res, next) {
+  try {
+    const { id } = req.params;
+
+    const locker = await Locker.findOne({ lockerId: id }).lean();
+
+    if (!locker) {
+      throw new NotFoundError(`Locker con ID ${id} non trovato`);
+    }
+
+    // Verifica che il locker abbia UUID Bluetooth configurato
+    if (!locker.bluetoothUuid) {
+      throw new ValidationError(
+        `Locker ${id} non ha UUID Bluetooth configurato. Contattare l'amministratore.`
+      );
+    }
+
+    const bluetoothInfo = {
+      lockerId: locker.lockerId,
+      bluetoothUuid: locker.bluetoothUuid,
+      bluetoothName: locker.bluetoothName || null,
+      verificationRequired: true, // Sempre richiesta verifica backend
+    };
+
+    logger.info(`Info Bluetooth locker ${id} richiesta`);
+
+    res.json({
+      success: true,
+      data: bluetoothInfo,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
  * GET /api/v1/lockers/:id/cells/stats
  * Statistiche celle per locker
  * RF2: Calcolo disponibilità tempo reale
@@ -370,6 +411,7 @@ export default {
   getLockerById,
   getLockerCells,
   getLockerCellStats,
+  getLockerBluetoothInfo,
 };
 
 

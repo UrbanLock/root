@@ -6,6 +6,7 @@ import {
   returnCell,
   getActiveCells,
   getHistory,
+  verifyBluetoothPairing,
 } from '../controllers/cellController.js';
 import { authenticate } from '../middleware/auth.js';
 
@@ -59,6 +60,14 @@ router.get('/active', authenticate, getActiveCells);
  * Query params: ?page=1&limit=20
  */
 router.get('/history', authenticate, getHistory);
+
+/**
+ * POST /api/v1/cells/verify-bluetooth-pairing
+ * Verifica accoppiamento Bluetooth e assegna cella
+ * RF3: Verifica prossimità e autorizzazione backend
+ * Autenticazione: Richiesta
+ */
+router.post('/verify-bluetooth-pairing', authenticate, verifyBluetoothPairing);
 
 export default router;
 

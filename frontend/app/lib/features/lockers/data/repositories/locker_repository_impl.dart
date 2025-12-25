@@ -139,6 +139,23 @@ class LockerRepositoryImpl implements LockerRepository {
       throw Exception('Errore nel caricamento statistiche: ${e.message}');
     }
   }
+
+  @override
+  Future<Map<String, dynamic>> getLockerBluetoothInfo(String lockerId) async {
+    try {
+      final response = await _apiClient.get(
+        '/lockers/$lockerId/bluetooth-info',
+        requireAuth: true,
+      );
+
+      return response as Map<String, dynamic>;
+    } on ApiException catch (e) {
+      if (e.isNotFound()) {
+        throw Exception('Locker non trovato: $lockerId');
+      }
+      throw Exception('Errore nel caricamento info Bluetooth: ${e.message}');
+    }
+  }
 }
 
 

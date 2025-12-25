@@ -140,6 +140,72 @@ class CellRepositoryImpl implements CellRepository {
       throw Exception('Errore nella restituzione della cella: ${e.message}');
     }
   }
+
+  @override
+  Future<BluetoothPairingResult> verifyBluetoothPairing({
+    required String lockerId,
+    required String cellId,
+    required String bluetoothUuid,
+    int? bluetoothRssi,
+    String? deviceName,
+    Map<String, dynamic>? geolocation,
+  }) async {
+    try {
+      final body = <String, dynamic>{
+        'lockerId': lockerId,
+        'cellId': cellId,
+        'bluetoothUuid': bluetoothUuid,
+      };
+
+      if (bluetoothRssi != null) {
+        body['bluetoothRssi'] = bluetoothRssi;
+      }
+      if (deviceName != null && deviceName.isNotEmpty) {
+        body['deviceName'] = deviceName;
+      }
+      if (geolocation != null && geolocation.isNotEmpty) {
+        body['geolocation'] = geolocation;
+      }
+
+      final response = await _apiClient.post(
+        ApiConfig.verifyBluetoothPairingEndpoint,
+        body: body,
+        requireAuth: true,
+      );
+
+      return BluetoothPairingResult.fromJson(response as Map<String, dynamic>);
+    } on ApiException catch (e) {
+      // Se il backend restituisce errore, crea risultato con verified: false
+      return BluetoothPairingResult(
+        verified: false,
+        reason: 'api_error',
+        message: e.message,
+      );
+    }
+  }
+
+  @override
+  Future<void> openCellWithPairing({
+    required String pairingId,
+    required String cellId,
+    required String lockerId,
+  }) async {
+    try {
+      final body = <String, dynamic>{
+        'pairingId': pairingId,
+        'cellId': cellId,
+        'lockerId': lockerId,
+      };
+
+      await _apiClient.post(
+        ApiConfig.openCellEndpoint,
+        body: body,
+        requireAuth: true,
+      );
+    } on ApiException catch (e) {
+      throw Exception('Errore nell\'apertura della cella: ${e.message}');
+    }
+  }
 }
 
 

@@ -4,6 +4,7 @@ import {
   getLockerById,
   getLockerCells,
   getLockerCellStats,
+  getLockerBluetoothInfo,
 } from '../controllers/lockerController.js';
 import {
   searchLockers,
@@ -94,6 +95,14 @@ router.get('/:id/cells', getLockerCells);
  * RF2: Calcolo disponibilità tempo reale
  */
 router.get('/:id/cells/stats', getLockerCellStats);
+
+/**
+ * GET /api/v1/lockers/:id/bluetooth-info
+ * Ottiene informazioni Bluetooth del locker per verifica accoppiamento
+ * Parametro: :id (lockerId)
+ * Autenticazione: Richiesta
+ */
+router.get('/:id/bluetooth-info', authenticate, getLockerBluetoothInfo);
 
 export default router;
 

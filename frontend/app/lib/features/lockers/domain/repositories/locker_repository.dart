@@ -29,6 +29,13 @@ abstract class LockerRepository {
   /// **Endpoint backend**: GET /api/v1/lockers/:id/cells/stats
   /// **Risposta**: Statistiche aggregate delle celle disponibili
   Future<LockerCellStats> getLockerCellStats(String lockerId);
+  
+  /// Ottiene le informazioni Bluetooth di un locker
+  /// 
+  /// **Endpoint backend**: GET /api/v1/lockers/:id/bluetooth-info
+  /// **Autenticazione**: Richiesta
+  /// **Risposta**: { "lockerId": "...", "bluetoothUuid": "...", "bluetoothName": "...", "verificationRequired": true }
+  Future<Map<String, dynamic>> getLockerBluetoothInfo(String lockerId);
 }
 
 
