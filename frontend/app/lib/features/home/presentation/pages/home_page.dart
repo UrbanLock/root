@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/cupertino.dart';
@@ -45,6 +46,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
   Set<LockerType> _selectedFilters = {}; // Filtri attivi (vuoto = tutti)
   Locker? _selectedLocker; // Locker selezionato per i dettagli
   bool _showCategoryFilters = false; // Mostra filtri categoria nella ricerca
+  Timer? _notificationsTimer;
   
   // Stato per i lockers
   List<Locker> _lockers = [];
@@ -90,6 +92,16 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
     _loadLockers();
     _requestLocationPermissionAndZoom();
     _loadUnreadNotificationsCount();
+
+    // Polling periodico per aggiornare il badge notifiche
+    _notificationsTimer = Timer.periodic(
+      const Duration(seconds: 30),
+      (_) {
+        if (_isAuthenticated) {
+          _loadUnreadNotificationsCount();
+        }
+      },
+    );
   }
 
   @override
@@ -102,6 +114,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _notificationsTimer?.cancel();
     _animationController.dispose();
     super.dispose();
   }
@@ -112,9 +125,19 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
     if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
       _checkOpenCellsAndNotify();
     }
+    if (state == AppLifecycleState.resumed && _isAuthenticated) {
+      _loadUnreadNotificationsCount();
+    }
   }
 
   Future<void> _loadUnreadNotificationsCount() async {
+    if (!_isAuthenticated) {
+      if (!mounted) return;
+      setState(() {
+        _unreadNotificationsCount = 0;
+      });
+      return;
+    }
     try {
       final count = await _notificationRepository.getUnreadCount();
       if (mounted) {

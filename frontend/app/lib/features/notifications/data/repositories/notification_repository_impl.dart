@@ -147,8 +147,13 @@ class NotificationRepositoryImpl implements NotificationRepository {
   Future<int> getUnreadCount() async {
     if (_apiClient != null) {
       try {
-        final unread = await getUnreadNotifications();
-        return unread.length;
+        final response = await _apiClient!.get(
+          ApiConfig.notificationsUnreadEndpoint,
+          requireAuth: true,
+        );
+        // Backend: { success: true, data: { items: [...], pagination: {...} } }
+        final items = response['items'] as List<dynamic>? ?? [];
+        return items.length;
       } catch (_) {
         // In caso di errore, fallback su conteggio locale
       }
