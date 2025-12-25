@@ -1,5 +1,8 @@
+import 'dart:convert';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:app/core/theme/theme_manager.dart';
 import 'package:app/core/styles/app_colors.dart';
 import 'package:app/core/styles/app_text_styles.dart';
@@ -43,11 +46,13 @@ class LockerDetailPage extends StatefulWidget {
 
 class _LockerDetailPageState extends State<LockerDetailPage> {
   bool _isLoading = true;
+  bool _isRefreshing = false;
   List<LockerCell> _cells = [];
   String? _errorMessage;
-  final ScrollController _scrollController = ScrollController();
-  final GlobalKey _borrowSectionKey = GlobalKey();
-  final GlobalKey _depositSectionKey = GlobalKey();
+  final PageController _pageController = PageController();
+  int _currentPageIndex = 0;
+  static const Duration _cellsCacheTtl = Duration(minutes: 5);
+  static final Map<String, _CellsCacheEntry> _memoryCellsCache = {};
 
   /// Raggruppa le celle di deposito per dimensione
   Map<CellSize, List<LockerCell>> _groupDepositCellsBySize() {
@@ -69,29 +74,24 @@ class _LockerDetailPageState extends State<LockerDetailPage> {
   void initState() {
     super.initState();
     _isAuthenticated = widget.isAuthenticated;
-    _loadCells();
+    _restoreCellsCache().then((_) {
+      _loadCells(showLoading: _cells.isEmpty);
+    });
   }
 
   @override
   void dispose() {
-    _scrollController.dispose();
+    _pageController.dispose();
     super.dispose();
   }
 
-  Future<void> _scrollToSection(GlobalKey key) async {
-    final ctx = key.currentContext;
-    if (ctx == null) return;
-    await Scrollable.ensureVisible(
-      ctx,
-      duration: const Duration(milliseconds: 350),
-      curve: Curves.easeInOut,
-      alignment: 0.08, // lascia un po' di spazio sopra la sezione
-    );
-  }
-
-  Future<void> _loadCells() async {
+  Future<void> _loadCells({required bool showLoading}) async {
     setState(() {
-      _isLoading = true;
+      if (showLoading) {
+        _isLoading = true;
+      } else {
+        _isRefreshing = true;
+      }
       _errorMessage = null;
     });
 
@@ -109,13 +109,91 @@ class _LockerDetailPageState extends State<LockerDetailPage> {
       setState(() {
         _cells = filteredCells;
         _isLoading = false;
+        _isRefreshing = false;
       });
+      await _saveCellsCache(filteredCells);
     } catch (e) {
       setState(() {
         _errorMessage = 'Errore nel caricamento: ${e.toString()}';
         _isLoading = false;
+        _isRefreshing = false;
       });
     }
+  }
+
+  String get _cellsCacheKey => 'locker_cells_cache_v1_${widget.locker.id}';
+  String get _cellsCacheAtKey => 'locker_cells_cache_at_v1_${widget.locker.id}';
+
+  Map<String, dynamic> _cellToJson(LockerCell c) {
+    return {
+      'id': c.id,
+      'cellNumber': c.cellNumber,
+      'type': c.type.name,
+      'size': c.size.name,
+      'isAvailable': c.isAvailable,
+      'itemName': c.itemName,
+      'itemDescription': c.itemDescription,
+      'itemImageUrl': c.itemImageUrl,
+      'pricePerHour': c.pricePerHour,
+      'pricePerDay': c.pricePerDay,
+      'availableUntil': c.availableUntil?.toIso8601String(),
+    };
+  }
+
+  Future<void> _restoreCellsCache() async {
+    final lockerId = widget.locker.id;
+    final mem = _memoryCellsCache[lockerId];
+    if (mem != null &&
+        DateTime.now().difference(mem.cachedAt) < _cellsCacheTtl &&
+        mem.cells.isNotEmpty) {
+      setState(() {
+        _cells = mem.cells;
+        _isLoading = false;
+      });
+      return;
+    }
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_cellsCacheKey);
+      final cachedAtMs = prefs.getInt(_cellsCacheAtKey);
+      if (raw == null || cachedAtMs == null) return;
+
+      final cachedAt =
+          DateTime.fromMillisecondsSinceEpoch(cachedAtMs, isUtc: false);
+      if (DateTime.now().difference(cachedAt) > _cellsCacheTtl) {
+        // Cache troppo vecchia: la useremo comunque solo se non abbiamo nulla,
+        // ma non blocchiamo.
+      }
+
+      final decoded = jsonDecode(raw) as List<dynamic>;
+      final cells = decoded
+          .map((e) => LockerCell.fromJson(e as Map<String, dynamic>))
+          .where((cell) =>
+              (cell.type == CellType.borrow || cell.type == CellType.deposit) &&
+              cell.isAvailable)
+          .toList();
+
+      if (!mounted || cells.isEmpty) return;
+      setState(() {
+        _cells = cells;
+        _isLoading = false;
+      });
+      _memoryCellsCache[lockerId] = _CellsCacheEntry(cells, DateTime.now());
+    } catch (_) {
+      // ignora cache corrotta
+    }
+  }
+
+  Future<void> _saveCellsCache(List<LockerCell> cells) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final payload = cells.map(_cellToJson).toList();
+      await prefs.setString(_cellsCacheKey, jsonEncode(payload));
+      await prefs.setInt(_cellsCacheAtKey, DateTime.now().millisecondsSinceEpoch);
+      _memoryCellsCache[widget.locker.id] =
+          _CellsCacheEntry(List<LockerCell>.from(cells), DateTime.now());
+    } catch (_) {}
   }
 
   /// Mostra dialog per richiedere il login
@@ -333,126 +411,292 @@ class _LockerDetailPageState extends State<LockerDetailPage> {
       builder: (context, _) {
         final isDark = widget.themeManager.isDarkMode;
 
+        final hasBorrow = _cells.any((c) => c.type == CellType.borrow);
+        final hasDeposit = _cells.any((c) => c.type == CellType.deposit);
+
+        final tabs = <_LockerTab>[];
+        if (hasBorrow) {
+          tabs.add(const _LockerTab(
+            keyId: 'borrow',
+            title: 'Prestito',
+            icon: CupertinoIcons.arrow_down_circle,
+          ));
+        }
+        if (hasDeposit) {
+          tabs.add(const _LockerTab(
+            keyId: 'deposit',
+            title: 'Deposito',
+            icon: CupertinoIcons.cube_box,
+          ));
+        }
+
+        // Se non abbiamo ancora celle (loading/errore), mostriamo una singola pagina “stato”
+        final showPager = tabs.length > 1 && !_isLoading && _errorMessage == null;
+        if (!showPager) {
+          _currentPageIndex = 0;
+        } else if (_currentPageIndex >= tabs.length) {
+          _currentPageIndex = 0;
+        }
+
         return CupertinoPageScaffold(
           backgroundColor: AppColors.background(isDark),
-          child: CustomScrollView(
-            controller: _scrollController,
-            physics: const BouncingScrollPhysics(
-              parent: AlwaysScrollableScrollPhysics(),
+          navigationBar: CupertinoNavigationBar(
+            backgroundColor: AppColors.surface(isDark),
+            middle: Text(
+              widget.locker.name,
+              style: AppTextStyles.title(isDark),
             ),
-            slivers: [
-              CupertinoSliverNavigationBar(
-                backgroundColor: AppColors.surface(isDark),
-                border: Border(
-                  bottom: BorderSide(
-                    color: AppColors.borderColor(isDark).withOpacity(0.12),
-                    width: 0.5,
-                  ),
-                ),
-                largeTitle: Text(
-                  widget.locker.name,
-                  style: AppTextStyles.title(isDark),
-                ),
-              ),
-              CupertinoSliverRefreshControl(
-                onRefresh: _loadCells,
-              ),
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-                sliver: SliverList(
-                  delegate: SliverChildListDelegate(
-                    [
-                      _buildLockerHeader(isDark),
-                      const SizedBox(height: 14),
-                      _buildMainActions(isDark),
-                      const SizedBox(height: 20),
-                      if (_isLoading) ...[
-                        const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 32),
-                          child: Center(child: CupertinoActivityIndicator()),
+          ),
+          child: SafeArea(
+            bottom: false,
+            child: Column(
+              children: [
+                // Header minimal con info essenziali + refresh indicator
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                  child: Row(
+                    children: [
+                      Icon(
+                        widget.locker.type.icon,
+                        size: 20,
+                        color: AppColors.primary(isDark),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          widget.locker.type.label,
+                          style: AppTextStyles.bodySecondary(isDark).copyWith(
+                            fontSize: 13,
+                          ),
                         ),
-                      ] else if (_errorMessage != null) ...[
-                        _buildStateCard(
-                          isDark: isDark,
-                          icon: CupertinoIcons.exclamationmark_triangle,
-                          title: 'Errore di caricamento',
-                          message: _errorMessage!,
-                          buttonText: 'Riprova',
-                          onPressed: _loadCells,
+                      ),
+                      if (_isRefreshing)
+                        const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CupertinoActivityIndicator(),
                         ),
-                      ] else if (_cells.isEmpty) ...[
-                        _buildStateCard(
-                          isDark: isDark,
-                          icon: CupertinoIcons.lock,
-                          title: 'Nessuna cella disponibile',
-                          message:
-                              'Non ci sono celle di prestito o deposito disponibili in questo locker.',
-                          buttonText: 'Aggiorna',
-                          onPressed: _loadCells,
-                        ),
-                      ] else ...[
-                        if (_cells.any((c) => c.type == CellType.borrow)) ...[
-                          Container(
-                            key: _borrowSectionKey,
-                            child: _buildSectionHeader(
-                              isDark: isDark,
-                              title: 'Prendi in prestito',
-                              subtitle: 'Scegli una cella e visualizza i dettagli dell\'oggetto',
-                              icon: CellType.borrow.icon,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          Wrap(
-                            spacing: 12,
-                            runSpacing: 12,
-                            alignment: WrapAlignment.start,
-                            children: _cells
-                                .where((c) => c.type == CellType.borrow)
-                                .map(
-                                  (cell) => _buildBorrowCellSquare(
-                                    isDark: isDark,
-                                    cell: cell,
-                                  ),
-                                )
-                                .toList(),
-                          ),
-                          const SizedBox(height: 22),
-                        ],
-                        if (_cells.any((c) => c.type == CellType.deposit)) ...[
-                          Container(
-                            key: _depositSectionKey,
-                            child: _buildSectionHeader(
-                              isDark: isDark,
-                              title: 'Deposita oggetto',
-                              subtitle: 'Scegli una dimensione e procedi con l\'affitto',
-                              icon: CellType.deposit.icon,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          Wrap(
-                            spacing: 12,
-                            runSpacing: 12,
-                            alignment: WrapAlignment.start,
-                            children: _groupDepositCellsBySize()
-                                .entries
-                                .map((entry) => _buildDepositGroupSquare(
-                                      isDark: isDark,
-                                      size: entry.key,
-                                      cells: entry.value,
-                                    ))
-                                .toList(),
-                          ),
-                          const SizedBox(height: 32),
-                        ],
-                      ],
                     ],
                   ),
                 ),
-              ),
-            ],
+                if (tabs.length > 1)
+                  const SizedBox(height: 8),
+                if (tabs.length > 1)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: _buildTabSwitcher(
+                      isDark: isDark,
+                      tabs: tabs,
+                      currentIndex: _currentPageIndex,
+                      onChanged: (index) {
+                        setState(() {
+                          _currentPageIndex = index;
+                        });
+                        _pageController.animateToPage(
+                          index,
+                          duration: const Duration(milliseconds: 280),
+                          curve: Curves.easeInOut,
+                        );
+                      },
+                    ),
+                  ),
+                const SizedBox(height: 10),
+                Expanded(
+                  child: _isLoading
+                      ? const Center(child: CupertinoActivityIndicator())
+                      : _errorMessage != null
+                          ? Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: _buildStateCard(
+                                isDark: isDark,
+                                icon: CupertinoIcons.exclamationmark_triangle,
+                                title: 'Errore di caricamento',
+                                message: _errorMessage!,
+                                buttonText: 'Riprova',
+                                onPressed: () => _loadCells(showLoading: true),
+                              ),
+                            )
+                          : _cells.isEmpty
+                              ? Padding(
+                                  padding: const EdgeInsets.all(16),
+                                  child: _buildStateCard(
+                                    isDark: isDark,
+                                    icon: CupertinoIcons.lock,
+                                    title: 'Nessuna cella disponibile',
+                                    message:
+                                        'Non ci sono celle di prestito o deposito disponibili in questo locker.',
+                                    buttonText: 'Aggiorna',
+                                    onPressed: () => _loadCells(showLoading: true),
+                                  ),
+                                )
+                              : showPager
+                                  ? PageView(
+                                      controller: _pageController,
+                                      onPageChanged: (index) {
+                                        setState(() {
+                                          _currentPageIndex = index;
+                                        });
+                                      },
+                                      children: tabs.map((tab) {
+                                        if (tab.keyId == 'borrow') {
+                                          return _buildBorrowPage(isDark);
+                                        }
+                                        return _buildDepositPage(isDark);
+                                      }).toList(),
+                                    )
+                                  : (hasBorrow
+                                      ? _buildBorrowPage(isDark)
+                                      : _buildDepositPage(isDark)),
+                ),
+              ],
+            ),
           ),
         );
       },
+    );
+  }
+
+  Widget _buildTabSwitcher({
+    required bool isDark,
+    required List<_LockerTab> tabs,
+    required int currentIndex,
+    required ValueChanged<int> onChanged,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: AppColors.surface(isDark),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: AppColors.borderColor(isDark).withOpacity(0.12),
+        ),
+      ),
+      child: Row(
+        children: List.generate(tabs.length, (i) {
+          final isSelected = i == currentIndex;
+          final tab = tabs[i];
+          return Expanded(
+            child: GestureDetector(
+              onTap: () => onChanged(i),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOut,
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                decoration: BoxDecoration(
+                  color: isSelected ? AppColors.card(isDark) : Colors.transparent,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: isSelected
+                      ? [
+                          BoxShadow(
+                            color:
+                                AppColors.shadowColor(isDark).withOpacity(0.10),
+                            blurRadius: 10,
+                            offset: const Offset(0, 6),
+                          ),
+                        ]
+                      : [],
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      tab.icon,
+                      size: 18,
+                      color: isSelected
+                          ? AppColors.primary(isDark)
+                          : AppColors.textSecondary(isDark),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      tab.title,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: isSelected
+                            ? AppColors.text(isDark)
+                            : AppColors.textSecondary(isDark),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }),
+      ),
+    );
+  }
+
+  Widget _buildBorrowPage(bool isDark) {
+    final borrowCells = _cells.where((c) => c.type == CellType.borrow).toList();
+    return CustomScrollView(
+      physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+      slivers: [
+        CupertinoSliverRefreshControl(onRefresh: () => _loadCells(showLoading: false)),
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(16, 6, 16, 24),
+          sliver: SliverList(
+            delegate: SliverChildListDelegate(
+              [
+                _buildSectionHeader(
+                  isDark: isDark,
+                  title: 'Prendi in prestito',
+                  subtitle:
+                      'Scegli una cella e visualizza i dettagli dell\'oggetto',
+                  icon: CellType.borrow.icon,
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: borrowCells
+                      .map((c) => _buildBorrowCellSquare(isDark: isDark, cell: c))
+                      .toList(),
+                ),
+                const SizedBox(height: 16),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDepositPage(bool isDark) {
+    final depositGroups = _groupDepositCellsBySize();
+    return CustomScrollView(
+      physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+      slivers: [
+        CupertinoSliverRefreshControl(onRefresh: () => _loadCells(showLoading: false)),
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(16, 6, 16, 24),
+          sliver: SliverList(
+            delegate: SliverChildListDelegate(
+              [
+                _buildSectionHeader(
+                  isDark: isDark,
+                  title: 'Deposita oggetto',
+                  subtitle: 'Scegli una dimensione e procedi con l\'affitto',
+                  icon: CellType.deposit.icon,
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: depositGroups.entries
+                      .map((e) => _buildDepositGroupSquare(
+                            isDark: isDark,
+                            size: e.key,
+                            cells: e.value,
+                          ))
+                      .toList(),
+                ),
+                const SizedBox(height: 16),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -640,83 +884,6 @@ class _LockerDetailPageState extends State<LockerDetailPage> {
     );
   }
 
-  /// Azioni principali sopra le liste: CTA rapidi per deposito e prestito
-  Widget _buildMainActions(bool isDark) {
-    final hasBorrow = _cells.any((c) => c.type == CellType.borrow);
-    final hasDeposit = _cells.any((c) => c.type == CellType.deposit);
-
-    if (!hasBorrow && !hasDeposit) {
-      return const SizedBox.shrink();
-    }
-
-    return Row(
-      children: [
-        if (hasDeposit)
-          Expanded(
-            child: CupertinoButton.filled(
-              padding: const EdgeInsets.symmetric(vertical: 13),
-              borderRadius: BorderRadius.circular(12),
-              onPressed: () {
-                if (!_isAuthenticated) {
-                  _showLoginRequiredDialog();
-                  return;
-                }
-                _scrollToSection(_depositSectionKey);
-              },
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(CupertinoIcons.cube_box),
-                  const SizedBox(width: 8),
-                  const Text(
-                    'Deposita',
-                    style: TextStyle(
-                      color: CupertinoColors.white,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        if (hasDeposit && hasBorrow) const SizedBox(width: 12),
-        if (hasBorrow)
-          Expanded(
-            child: CupertinoButton(
-              padding: const EdgeInsets.symmetric(vertical: 13),
-              borderRadius: BorderRadius.circular(12),
-              color: AppColors.surface(isDark),
-              onPressed: () {
-                if (!_isAuthenticated) {
-                  _showLoginRequiredDialog();
-                  return;
-                }
-                _scrollToSection(_borrowSectionKey);
-              },
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    CellType.borrow.icon,
-                    size: 18,
-                    color: AppColors.primary(isDark),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Prestito',
-                    style: TextStyle(
-                      color: AppColors.text(isDark),
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-
   Widget _buildSectionHeader({
     required bool isDark,
     required String title,
@@ -810,39 +977,43 @@ class _LockerDetailPageState extends State<LockerDetailPage> {
             // Contenuto principale - centrato
             Center(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 24),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     // Icona dell'oggetto con sfondo
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: AppColors.primary(isDark).withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(
-                        getIconForItem(cell.itemName),
-                        size: squareSize * 0.35, // 35% della dimensione del quadrato
-                        color: AppColors.primary(isDark),
+                    Flexible(
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary(isDark).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(
+                          getIconForItem(cell.itemName),
+                          size: squareSize * 0.28, // Ridotto da 0.35 a 0.28
+                          color: AppColors.primary(isDark),
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 6),
                     // Nome oggetto
                     if (cell.itemName != null)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        child: Text(
-                          cell.itemName!,
-                          style: AppTextStyles.body(isDark).copyWith(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            height: 1.2,
+                      Flexible(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 2),
+                          child: Text(
+                            cell.itemName!,
+                            style: AppTextStyles.body(isDark).copyWith(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w700,
+                              height: 1.15,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
                           ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.center,
                         ),
                       ),
                   ],
@@ -1235,38 +1406,42 @@ class _LockerDetailPageState extends State<LockerDetailPage> {
             // Contenuto principale - centrato
             Center(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 24),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     // Icona della dimensione con sfondo
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: AppColors.primary(isDark).withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(
-                        sizeIcon,
-                        size: squareSize * 0.35, // 35% della dimensione del quadrato
-                        color: AppColors.primary(isDark),
+                    Flexible(
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary(isDark).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(
+                          sizeIcon,
+                          size: squareSize * 0.28, // Ridotto da 0.35 a 0.28
+                          color: AppColors.primary(isDark),
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 6),
                     // Nome dimensione
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      child: Text(
-                        size.label,
-                        style: AppTextStyles.body(isDark).copyWith(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          height: 1.2,
+                    Flexible(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 2),
+                        child: Text(
+                          size.label,
+                          style: AppTextStyles.body(isDark).copyWith(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w700,
+                            height: 1.15,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.center,
                       ),
                     ),
                   ],
@@ -1528,5 +1703,24 @@ class _LockerDetailPageState extends State<LockerDetailPage> {
       ),
     );
   }
+}
+
+class _LockerTab {
+  final String keyId;
+  final String title;
+  final IconData icon;
+
+  const _LockerTab({
+    required this.keyId,
+    required this.title,
+    required this.icon,
+  });
+}
+
+class _CellsCacheEntry {
+  final List<LockerCell> cells;
+  final DateTime cachedAt;
+
+  _CellsCacheEntry(this.cells, this.cachedAt);
 }
 
