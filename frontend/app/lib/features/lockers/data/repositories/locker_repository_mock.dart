@@ -94,6 +94,28 @@ class LockerRepositoryMock implements LockerRepository {
     final cells = await getLockerCells(lockerId);
     return calculateCellStats(cells);
   }
+
+  @override
+  Future<Map<String, dynamic>> getLockerBluetoothInfo(String lockerId) async {
+    await Future.delayed(_apiDelay);
+    
+    // ⚠️ SOLO PER TESTING: Simula informazioni Bluetooth del locker
+    // TODO: Quando il backend sarà pronto, sostituire con:
+    // final response = await _apiClient.get('/lockers/$lockerId/bluetooth-info');
+    // return response as Map<String, dynamic>;
+    
+    // Genera UUID Bluetooth mock basato sull'ID del locker
+    // Per testing, usiamo un UUID fittizio ma consistente
+    final mockUuid = '12:34:56:78:90:${lockerId.substring(lockerId.length - 2).padLeft(2, '0')}';
+    final mockName = 'Locker-${lockerId.substring(lockerId.length - 3)}';
+    
+    return {
+      'lockerId': lockerId,
+      'bluetoothUuid': mockUuid,
+      'bluetoothName': mockName,
+      'verificationRequired': true,
+    };
+  }
 }
 
 

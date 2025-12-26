@@ -209,5 +209,80 @@ class CellRepositoryMock implements CellRepository {
     // Mock: rimuove la cella dalle attive per simulare la restituzione
     _mockActiveCells.removeWhere((c) => c.cellId == cellId);
   }
+
+  @override
+  Future<BluetoothPairingResult> verifyBluetoothPairing({
+    required String lockerId,
+    required String cellId,
+    required String bluetoothUuid,
+    int? bluetoothRssi,
+    String? deviceName,
+    Map<String, dynamic>? geolocation,
+  }) async {
+    await Future.delayed(_apiDelay);
+    
+    // ⚠️ SOLO PER TESTING: Simula verifica accoppiamento Bluetooth
+    // TODO: Quando il backend sarà pronto, sostituire con:
+    // final response = await _apiClient.post(
+    //   ApiConfig.verifyBluetoothPairingEndpoint,
+    //   body: { ... },
+    // );
+    // return BluetoothPairingResult.fromJson(response);
+    
+    // Per testing, la verifica ha sempre successo
+    // Genera un pairingId mock
+    final pairingId = 'pairing-${DateTime.now().millisecondsSinceEpoch}';
+    
+    // Crea una cella assegnata mock
+    final cellAssigned = ActiveCell(
+      id: pairingId,
+      lockerId: lockerId,
+      lockerName: 'Mock Locker',
+      lockerType: 'Personali',
+      cellNumber: 'Cella ${cellId.split('-').last}',
+      cellId: cellId,
+      startTime: DateTime.now(),
+      endTime: DateTime.now().add(const Duration(days: 7)),
+      type: CellUsageType.borrowed,
+    );
+    
+    // Aggiungi la cella alle attive
+    addActiveCell(cellAssigned);
+    
+    return BluetoothPairingResult(
+      verified: true,
+      pairingId: pairingId,
+      cellAssigned: cellAssigned,
+      message: 'Accoppiamento verificato. Cella assegnata.',
+    );
+  }
+
+  @override
+  Future<void> openCellWithPairing({
+    required String pairingId,
+    required String cellId,
+    required String lockerId,
+  }) async {
+    await Future.delayed(_apiDelay);
+    
+    // ⚠️ SOLO PER TESTING: Simula apertura cella con pairingId
+    // TODO: Quando il backend sarà pronto, sostituire con:
+    // await _apiClient.post(
+    //   ApiConfig.openCellEndpoint,
+    //   body: {
+    //     'pairingId': pairingId,
+    //     'cellId': cellId,
+    //     'lockerId': lockerId,
+    //   },
+    // );
+    
+    // Verifica che la cella esista nelle attive (simula verifica backend)
+    final cellExists = _mockActiveCells.any((c) => c.id == pairingId && c.cellId == cellId);
+    if (!cellExists) {
+      throw Exception('Accoppiamento non trovato o non più attivo per pairingId $pairingId');
+    }
+    
+    // Simula apertura cella (in produzione il backend invierebbe comando al locker fisico)
+  }
 }
 
