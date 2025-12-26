@@ -323,8 +323,34 @@ export async function openCell(req, res, next) {
       noleggio.fotoAnomalia = await savePhoto(photo, noleggio.noleggioId);
     }
 
-    // Aggiorna dataAggiornamento
+    // ========== APERTURA LOCKER FISICO ==========
+    // In produzione: invia comando al locker fisico tramite API/Bluetooth
+    // Per ora: mock per testing (rimuovere in produzione)
+    try {
+      // TODO PRODUZIONE: Sostituire con chiamata API reale al locker
+      // Esempio: await lockerHardwareService.openCell(lockerId, cell_id_final);
+      
+      // ========== MOCK TESTING - RIMUOVERE IN PRODUZIONE ==========
+      logger.info(
+        `[MOCK] Simulazione apertura locker fisico: lockerId=${lockerId}, cellId=${cell_id_final}`
+      );
+      // Simula invio comando al locker (in produzione sarà reale)
+      // Il locker fisico riceverà il comando e aprirà la cella
+      // ========== FINE MOCK ==========
+    } catch (error) {
+      logger.error(`Errore apertura locker fisico: ${error.message}`);
+      throw new ValidationError(
+        'Errore nell\'apertura fisica della cella. Riprova più tardi.'
+      );
+    }
+
+    // Aggiorna stato: cella aperta, in attesa chiusura
     noleggio.dataAggiornamento = new Date();
+    // Marca che la cella è stata aperta fisicamente
+    noleggio.cellaAperta = true;
+    noleggio.dataApertura = new Date();
+    noleggio.cellaChiusa = false; // Reset stato chiusura
+    noleggio.dataChiusura = null;
     await noleggio.save();
 
     logger.info(
@@ -382,7 +408,29 @@ export async function closeCell(req, res, next) {
       );
     }
 
-    // Aggiorna dataAggiornamento (NON termina noleggio - rimane attivo per ritiro)
+    // Verifica che la cella sia stata aperta
+    if (!noleggio.cellaAperta) {
+      throw new ValidationError(
+        'Cella non è stata aperta. Impossibile chiudere.'
+      );
+    }
+
+    // Verifica che la cella non sia già chiusa
+    if (noleggio.cellaChiusa) {
+      // Già chiusa, restituisci successo
+      return res.json({
+        success: true,
+        data: {
+          cell_closed: true,
+          already_closed: true,
+          message: 'Cella già chiusa',
+        },
+      });
+    }
+
+    // Aggiorna stato: cella chiusa
+    noleggio.cellaChiusa = true;
+    noleggio.dataChiusura = new Date();
     noleggio.dataAggiornamento = new Date();
     await noleggio.save();
 
@@ -394,6 +442,8 @@ export async function closeCell(req, res, next) {
       success: true,
       data: {
         cell_closed: true,
+        already_closed: false,
+        message: 'Cella chiusa con successo',
       },
     });
   } catch (error) {
