@@ -294,18 +294,16 @@ export async function openCell(req, res, next) {
 
     const cell_id_final = pairingId ? cellId : cell_id;
 
-    // Trova Cell per verificare richiede_foto
+    // Trova Cell per verifiche
     const cell = await Cell.findOne({ cellaId: cell_id_final });
     if (!cell) {
       throw new NotFoundError(`Cella ${cell_id_final} non trovata`);
     }
 
-    // RF3: Verifica foto se richiesta
-    if (cell.richiede_foto && !photo) {
-      throw new ValidationError(
-        'Foto obbligatoria per questa cella (richiede_foto: true)'
-      );
-    }
+    // NOTA: La foto NON è obbligatoria per l'apertura di una cella
+    // La foto è opzionale e viene usata solo per segnalare anomalie
+    // Se richiesta_foto è true, la foto può essere fornita ma non è obbligatoria per aprire
+    // La foto obbligatoria si applica solo a depositi/restituzioni specifici, non all'apertura
 
     // RF3: Verifica Bluetooth token se presente (QR code non più utilizzato)
     if (noleggio.bluetoothToken && req.body.bluetoothToken) {
@@ -855,6 +853,18 @@ export async function verifyBluetoothPairing(req, res, next) {
       );
     }
 
+    // ========== CAMBIO STATO CELLA - SUBITO ALL'ASSEGNAZIONE ==========
+    // IMPORTANTE: Lo stato viene cambiato SUBITO quando viene assegnata la cella,
+    // prima di creare il Noleggio. Questo previene doppie assegnazioni simultanee.
+    // Se due utenti cercano di assegnare la stessa cella contemporaneamente,
+    // solo il primo riuscirà (stato "libera"), il secondo riceverà errore (stato "occupata").
+    cell.stato = 'occupata';
+    await cell.save();
+    logger.info(
+      `Cella ${cellId} impostata a "occupata" - Assegnazione in corso per utente ${userId}`
+    );
+    // ========== FINE CAMBIO STATO ==========
+
     // 7. Crea Noleggio (assegna cella)
     const now = new Date();
     const dataInizio = now;
@@ -882,10 +892,6 @@ export async function verifyBluetoothPairing(req, res, next) {
     });
 
     await noleggio.save();
-
-    // 8. Aggiorna Cell stato a "occupata"
-    cell.stato = 'occupata';
-    await cell.save();
 
     // 9. Formatta come ActiveCell per frontend
     const activeCell = await formatNoleggioAsActiveCell(noleggio);
