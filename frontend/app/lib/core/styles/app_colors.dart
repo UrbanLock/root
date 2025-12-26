@@ -55,4 +55,8 @@ class AppColors {
   // Colore success (verde)
   static Color success(bool isDark) =>
       isDark ? const Color(0xFF34C759) : const Color(0xFF34C759);
+  
+  // Colore warning (arancione/giallo)
+  static Color warning(bool isDark) =>
+      isDark ? const Color(0xFFFF9500) : const Color(0xFFFF9500);
 }

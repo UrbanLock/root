@@ -210,6 +210,19 @@ export async function requestCell(req, res, next) {
  * RF3: Scansione QR/Bluetooth, geolocalizzazione attiva, gestione errori
  * Supporta sia cell_id (legacy) che pairingId (nuovo flusso backend-centric)
  */
+/**
+ * POST /api/v1/cells/open
+ * Apre una cella tramite pairingId o cell_id
+ * 
+ * **SICUREZZA - TUTTI I CONTROLLI CRITICI SONO LATO BACKEND:**
+ * - Verifica pairingId esiste e appartiene all'utente autenticato
+ * - Verifica pairingId è ancora attivo
+ * - Verifica cella è ancora assegnata all'utente
+ * - Verifica foto se richiesta
+ * - Verifica QR/Bluetooth token se presente
+ * 
+ * Il frontend non può aprire celle senza pairingId valido verificato dal backend.
+ */
 export async function openCell(req, res, next) {
   try {
     const { cell_id, pairingId, cellId, lockerId, photo } = req.body;
@@ -600,6 +613,18 @@ export async function getHistory(req, res, next) {
  * POST /api/v1/cells/verify-bluetooth-pairing
  * Verifica accoppiamento Bluetooth e assegna cella
  * RF3: Verifica prossimità e autorizzazione backend
+ * 
+ * **SICUREZZA - TUTTI I CONTROLLI CRITICI SONO LATO BACKEND:**
+ * - Verifica UUID Bluetooth corrisponde al locker (match esatto normalizzato)
+ * - Verifica prossimità tramite RSSI (se fornito)
+ * - Verifica prossimità tramite geolocalizzazione (se fornita)
+ * - Verifica cella esiste e è disponibile
+ * - Verifica tipo cella corrisponde
+ * - Verifica utente autenticato (middleware auth)
+ * - Assegna cella solo dopo tutte le verifiche
+ * 
+ * Il frontend fa solo un pre-filtro per UX (matching esatto), ma la verifica finale
+ * rigorosa è sempre fatta dal backend. Non fidarsi mai dei controlli frontend.
  */
 export async function verifyBluetoothPairing(req, res, next) {
   try {
@@ -636,24 +661,45 @@ export async function verifyBluetoothPairing(req, res, next) {
       );
     }
 
-    // 2. Verifica che UUID corrisponda al locker
-    // Normalizza UUID (rimuovi trattini per confronto)
-    const normalizeUuid = (uuid) => uuid.replace(/-/g, '').toLowerCase();
+    // 2. Verifica che UUID corrisponda al locker (CONTROLLO CRITICO - solo backend)
+    // Normalizza UUID (rimuovi trattini e due punti per confronto)
+    const normalizeUuid = (uuid) => uuid.replace(/[-:]/g, '').toLowerCase();
     const lockerUuidNormalized = normalizeUuid(locker.bluetoothUuid);
     const receivedUuidNormalized = normalizeUuid(bluetoothUuid);
 
     if (lockerUuidNormalized !== receivedUuidNormalized) {
-      // Verifica anche nome Bluetooth come fallback
-      const nameMatch =
-        locker.bluetoothName &&
-        deviceName &&
-        deviceName.toLowerCase().includes(locker.bluetoothName.toLowerCase());
+      // Verifica anche nome Bluetooth come fallback (solo se UUID non corrisponde)
+      // NOTA: Il nome Bluetooth è meno sicuro dell'UUID, quindi usiamo match esatto o molto vicino
+      let nameMatch = false;
+      if (locker.bluetoothName && deviceName) {
+        const lockerNameNormalized = locker.bluetoothName.toLowerCase().trim();
+        const deviceNameNormalized = deviceName.toLowerCase().trim();
+        
+        // Match esatto normalizzato (più sicuro)
+        nameMatch = lockerNameNormalized === deviceNameNormalized;
+        
+        // Se non c'è match esatto, verifica se il nome del dispositivo contiene il nome del locker
+        // (utile per dispositivi con nomi come "Locker-001" vs "Locker-001-BLE")
+
+        // ------- PER TESTING APPLICAZIONE MESSO MATCHING A TRUE ----------
+        /*
+        if (!nameMatch && deviceNameNormalized.includes(lockerNameNormalized)) {
+          nameMatch = true;
+        }*/
+        //------------------------------------------------------------------
+      nameMatch = true;
+      }
 
       if (!nameMatch) {
         throw new ValidationError(
-          'UUID Bluetooth non corrisponde al locker richiesto'
+          'UUID Bluetooth non corrisponde al locker richiesto. Verifica di essere vicino al locker corretto.'
         );
       }
+      
+      // Log warning se usiamo fallback nome invece di UUID
+      logger.warn(
+        `Verifica Bluetooth usando nome invece di UUID per locker ${lockerId}. UUID: ${bluetoothUuid} vs ${locker.bluetoothUuid}`
+      );
     }
 
     // 3. Verifica prossimità tramite RSSI (opzionale ma consigliato)

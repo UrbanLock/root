@@ -3,6 +3,7 @@ import 'package:app/core/api/api_exception.dart';
 import 'package:app/core/config/api_config.dart';
 import 'package:app/features/cells/domain/models/active_cell.dart';
 import 'package:app/features/cells/domain/repositories/cell_repository.dart';
+import 'dart:convert';
 
 class CellRepositoryImpl implements CellRepository {
   final ApiClient _apiClient;
@@ -173,13 +174,61 @@ class CellRepositoryImpl implements CellRepository {
         requireAuth: true,
       );
 
-      return BluetoothPairingResult.fromJson(response as Map<String, dynamic>);
+      // Verifica che la risposta sia un Map
+      if (response is! Map<String, dynamic>) {
+        return BluetoothPairingResult(
+          verified: false,
+          reason: 'invalid_response',
+          message: 'Formato risposta non valido dal server',
+        );
+      }
+
+      // Prova a parsare la risposta, gestendo errori di parsing
+      try {
+        return BluetoothPairingResult.fromJson(response);
+      } catch (e) {
+        // Se il parsing fallisce ma verified è false, restituisci comunque il risultato
+        if (response['verified'] == false) {
+          return BluetoothPairingResult(
+            verified: false,
+            reason: response['reason'] as String? ?? 'parse_error',
+            message: response['message'] as String? ?? 'Errore nella lettura della risposta del server.',
+          );
+        }
+        // Se verified è true ma il parsing fallisce, è un errore critico
+        return BluetoothPairingResult(
+          verified: false,
+          reason: 'parse_error',
+          message: 'Errore nella lettura della risposta del server. Riprova più tardi.',
+        );
+      }
     } on ApiException catch (e) {
       // Se il backend restituisce errore, crea risultato con verified: false
       return BluetoothPairingResult(
         verified: false,
         reason: 'api_error',
         message: e.message,
+      );
+    } on ConnectionException catch (e) {
+      // Errore di connessione
+      return BluetoothPairingResult(
+        verified: false,
+        reason: 'connection_error',
+        message: 'Errore di connessione. Verifica la tua connessione internet e riprova.',
+      );
+    } on FormatException catch (e) {
+      // Errore di parsing JSON
+      return BluetoothPairingResult(
+        verified: false,
+        reason: 'parse_error',
+        message: 'Errore nella lettura della risposta del server. Riprova più tardi.',
+      );
+    } catch (e) {
+      // Altri errori generici
+      return BluetoothPairingResult(
+        verified: false,
+        reason: 'unknown_error',
+        message: 'Si è verificato un errore imprevisto. Riprova più tardi.',
       );
     }
   }

@@ -7,6 +7,7 @@ import 'package:app/core/styles/app_colors.dart';
 import 'package:app/core/styles/app_text_styles.dart';
 import 'package:app/core/notifications/notification_service.dart';
 import 'package:app/core/di/app_dependencies.dart';
+import 'package:app/core/api/api_exception.dart';
 import 'package:app/features/cells/domain/models/active_cell.dart';
 import 'package:app/features/cells/domain/repositories/cell_repository.dart';
 import 'package:app/features/lockers/domain/models/locker_cell.dart';
@@ -16,21 +17,23 @@ import 'package:app/features/reports/presentation/pages/report_issue_page.dart';
 /// Pagina per aprire una cella tramite Bluetooth
 /// 
 /// **Flusso per prestito:**
-/// 1. Ricerca del locker via Bluetooth
-/// 2. Se Bluetooth non attivo, richiesta attivazione con refresh automatico
-/// 3. Una volta connesso, pulsante per aprire la cella
-/// 4. Attesa chiusura sportello (simulata con 3 secondi)
-/// 5. Schermata di conferma chiusura
+/// 1. Carica UUID Bluetooth del locker dal backend
+/// 2. Ricerca del locker via Bluetooth (cerca dispositivo con UUID corrispondente)
+/// 3. Se Bluetooth non attivo, richiesta attivazione con refresh automatico
+/// 4. Verifica accoppiamento con backend (UUID, RSSI, geolocalizzazione)
+/// 5. Una volta verificato, pulsante per aprire la cella
+/// 6. Attesa chiusura sportello (simulata con timer - in produzione verrà rilevata tramite sensore)
+/// 7. Schermata di conferma chiusura
 /// 
 /// **Flusso per deposito (quando onVerificationComplete è presente):**
-/// 1. Ricerca del locker via Bluetooth
-/// 2. Se Bluetooth non attivo, richiesta attivazione con refresh automatico
-/// 3. Una volta connesso, chiama onVerificationComplete (naviga al pagamento)
+/// 1. Carica UUID Bluetooth del locker dal backend
+/// 2. Ricerca del locker via Bluetooth
+/// 3. Se Bluetooth non attivo, richiesta attivazione con refresh automatico
+/// 4. Verifica accoppiamento con backend
+/// 5. Una volta verificato, chiama onVerificationComplete (naviga al pagamento)
 /// 
-/// **TODO quando il backend sarà pronto:**
-/// - UUID reale del locker dal backend
-/// - Comando Bluetooth reale per aprire la cella
-/// - Rilevamento chiusura tramite sensore/signale Bluetooth
+/// **Nota:** Il locker deve avere un UUID Bluetooth configurato nel database.
+/// Per testing, è possibile usare un cellulare con Bluetooth attivo e inserire il suo MAC address nel database.
 class OpenCellPage extends StatefulWidget {
   final ThemeManager themeManager;
   final LockerCell cell;
@@ -86,6 +89,7 @@ class _OpenCellPageState extends State<OpenCellPage> {
   }
   
   /// Carica le informazioni Bluetooth del locker dal backend
+  /// Richiede che il locker abbia UUID Bluetooth configurato nel database
   Future<void> _loadBluetoothInfo() async {
     setState(() {
       _isLoadingBluetoothInfo = true;
@@ -104,21 +108,40 @@ class _OpenCellPageState extends State<OpenCellPage> {
       
       final bluetoothInfo = await lockerRepo.getLockerBluetoothInfo(widget.lockerId);
       
+      final bluetoothUuid = bluetoothInfo['bluetoothUuid'] as String?;
+      final bluetoothName = bluetoothInfo['bluetoothName'] as String?;
+      
+      // Verifica che l'UUID sia presente
+      if (bluetoothUuid == null || bluetoothUuid.isEmpty) {
+        setState(() {
+          _statusMessage = 'Locker non configurato correttamente. Contattare l\'amministratore.';
+          _isLoadingBluetoothInfo = false;
+        });
+        return;
+      }
+      
       setState(() {
-        _bluetoothUuid = bluetoothInfo['bluetoothUuid'] as String?;
-        _bluetoothName = bluetoothInfo['bluetoothName'] as String?;
+        _bluetoothUuid = bluetoothUuid;
+        _bluetoothName = bluetoothName;
         _isLoadingBluetoothInfo = false;
       });
       
       // Dopo aver caricato le info, avvia verifica Bluetooth
       _checkBluetoothAndStartScan();
-    } catch (e) {
+    } on BluetoothNotConfiguredException catch (e) {
+      // Il locker non ha UUID Bluetooth configurato
+      debugPrint('❌ [ERROR] Locker ${widget.lockerId} non ha UUID Bluetooth configurato: ${e.message}');
+      
       setState(() {
-        _statusMessage = 'Errore nel caricamento: ${e.toString()}';
+        _statusMessage = 'Locker non ha UUID Bluetooth configurato. Contattare l\'amministratore.';
         _isLoadingBluetoothInfo = false;
       });
-      // Anche in caso di errore, prova comunque la scansione (fallback)
-      _checkBluetoothAndStartScan();
+    } catch (e) {
+      debugPrint('❌ [ERROR] Errore nel caricamento info Bluetooth: $e');
+      setState(() {
+        _statusMessage = 'Errore nel caricamento informazioni Bluetooth. Riprova più tardi.';
+        _isLoadingBluetoothInfo = false;
+      });
     }
   }
 
@@ -133,6 +156,14 @@ class _OpenCellPageState extends State<OpenCellPage> {
 
   /// Controlla lo stato Bluetooth e avvia la ricerca
   Future<void> _checkBluetoothAndStartScan() async {
+    // Verifica che abbiamo un UUID Bluetooth
+    if (_bluetoothUuid == null || _bluetoothUuid!.isEmpty) {
+      setState(() {
+        _statusMessage = 'UUID Bluetooth non disponibile. Contattare l\'amministratore.';
+      });
+      return;
+    }
+    
     try {
       // Verifica lo stato corrente
       final adapterState = await FlutterBluePlus.adapterState.first;
@@ -247,8 +278,18 @@ class _OpenCellPageState extends State<OpenCellPage> {
     }
   }
 
-  /// Avvia la ricerca del locker
+  /// Avvia la ricerca del locker tramite Bluetooth reale
+  /// Cerca il dispositivo con UUID corrispondente a quello configurato nel database
   Future<void> _startScan() async {
+    // Verifica che abbiamo un UUID Bluetooth
+    if (_bluetoothUuid == null || _bluetoothUuid!.isEmpty) {
+      setState(() {
+        _statusMessage = 'UUID Bluetooth non disponibile. Contattare l\'amministratore.';
+        _isScanning = false;
+      });
+      return;
+    }
+    
     try {
       setState(() {
         _isScanning = true;
@@ -257,46 +298,9 @@ class _OpenCellPageState extends State<OpenCellPage> {
         _lockerConnected = false;
       });
 
-      // ============================================================
-      // ⚠️ MODALITÀ TESTING: Simula ritrovamento dispositivo
-      // ============================================================
-      // Poiché i locker fisici non esistono ancora, simuliamo il
-      // ritrovamento del dispositivo Bluetooth dopo un breve delay.
-      // Questo permette di testare il flusso completo senza hardware.
-      // 
-      // TODO: RIMUOVERE QUESTO CODICE quando i locker fisici saranno disponibili
-      // e sostituire con la scansione Bluetooth reale (vedi codice commentato sotto)
-      // ============================================================
+      debugPrint('🔍 [BLUETOOTH] Avvio scansione Bluetooth reale per UUID: $_bluetoothUuid');
       
-      // Simula ritrovamento dopo 2 secondi (per testing)
-      Future.delayed(const Duration(seconds: 2), () {
-        if (mounted && _isScanning && !_lockerFound) {
-          // Usa l'UUID ricevuto dal backend come dispositivo "trovato"
-          final simulatedDeviceId = _bluetoothUuid ?? '00:00:00:00:00:00';
-          final simulatedDeviceName = _bluetoothName ?? 'Locker-Simulato';
-          final simulatedRssi = -45; // RSSI simulato (buon segnale)
-          
-          FlutterBluePlus.stopScan();
-          setState(() {
-            _lockerFound = true;
-            _isScanning = false;
-            _statusMessage = 'Dispositivo trovato. Verifica in corso...';
-          });
-          
-          // Verifica accoppiamento con backend usando dati simulati
-          _verifyPairingWithBackend(
-            bluetoothUuid: simulatedDeviceId,
-            deviceName: simulatedDeviceName,
-            rssi: simulatedRssi,
-          );
-        }
-      });
-
-      // ============================================================
-      // CODICE REALE (commentato per testing - da riattivare quando
-      // i locker fisici saranno disponibili):
-      // ============================================================
-      /*
+      // Avvia scansione Bluetooth reale
       await FlutterBluePlus.startScan(timeout: const Duration(seconds: 15));
 
       _scanResultsSubscription?.cancel();
@@ -307,24 +311,31 @@ class _OpenCellPageState extends State<OpenCellPage> {
             final deviceId = result.device.remoteId.toString();
             final deviceName = result.device.platformName;
             
-            // Verifica UUID (priorità) o nome Bluetooth
-            bool isMatch = false;
+            debugPrint('🔍 [BLUETOOTH] Dispositivo trovato: $deviceId ($deviceName) - RSSI: ${result.rssi}');
+            
+            // Pre-filtro UUID per UX (matching esatto normalizzato)
+            // NOTA: Questo è solo un pre-filtro per UX. La verifica finale rigorosa è fatta dal backend.
+            bool isPotentialMatch = false;
             if (_bluetoothUuid != null && _bluetoothUuid!.isNotEmpty) {
-              // Confronta UUID (rimuovi eventuali trattini per compatibilità)
-              final normalizedUuid = _bluetoothUuid!.replaceAll('-', '').toLowerCase();
-              final normalizedDeviceId = deviceId.replaceAll('-', '').toLowerCase();
-              isMatch = normalizedDeviceId.contains(normalizedUuid) || 
-                       normalizedUuid.contains(normalizedDeviceId);
+              // Normalizza UUID (rimuovi trattini e due punti per confronto)
+              final normalizedUuid = _bluetoothUuid!.replaceAll('-', '').replaceAll(':', '').toLowerCase();
+              final normalizedDeviceId = deviceId.replaceAll('-', '').replaceAll(':', '').toLowerCase();
+              
+              // Match ESATTO normalizzato (non permissivo per sicurezza)
+              // Il backend farà la verifica finale rigorosa
+              isPotentialMatch = normalizedDeviceId == normalizedUuid;
+              
+              debugPrint('🔍 [BLUETOOTH] Pre-filtro UUID: "$normalizedUuid" vs "$normalizedDeviceId" -> $isPotentialMatch');
             }
             
-            // Fallback: verifica nome Bluetooth se UUID non disponibile
-            if (!isMatch && _bluetoothName != null && deviceName.isNotEmpty) {
-              isMatch = deviceName.toLowerCase().contains(_bluetoothName!.toLowerCase()) ||
-                       _bluetoothName!.toLowerCase().contains(deviceName.toLowerCase());
-            }
-            
-            if (isMatch) {
+            // Se non c'è match UUID esatto, salta questo dispositivo
+            // Il backend farà la verifica finale, quindi non usiamo fallback nome qui
+            if (isPotentialMatch) {
+              debugPrint('✅ [BLUETOOTH] Dispositivo potenzialmente corrispondente trovato: $deviceId ($deviceName) - RSSI: ${result.rssi}');
+              debugPrint('   ⚠️ [BLUETOOTH] Verifica finale rigorosa sarà fatta dal backend');
+              
               // Dispositivo trovato localmente - ora verifica con backend
+              // Il backend farà la verifica finale rigorosa (UUID esatto, RSSI, geolocalizzazione)
               FlutterBluePlus.stopScan();
               setState(() {
                 _lockerFound = true;
@@ -332,7 +343,7 @@ class _OpenCellPageState extends State<OpenCellPage> {
                 _statusMessage = 'Dispositivo trovato. Verifica in corso...';
               });
               
-              // Verifica accoppiamento con backend
+              // Verifica accoppiamento con backend (verifica finale rigorosa)
               _verifyPairingWithBackend(
                 bluetoothUuid: deviceId,
                 deviceName: deviceName,
@@ -347,16 +358,16 @@ class _OpenCellPageState extends State<OpenCellPage> {
       // Timeout dopo 15 secondi
       Future.delayed(const Duration(seconds: 15), () {
         if (mounted && _isScanning && !_lockerFound) {
+          debugPrint('⏱️ [BLUETOOTH] Timeout scansione: locker non trovato');
           setState(() {
             _isScanning = false;
-            _statusMessage = 'Locker non trovato nelle vicinanze. Assicurati di essere vicino al locker.';
+            _statusMessage = 'Locker non trovato nelle vicinanze. Assicurati di essere vicino al locker e che il Bluetooth sia attivo sul dispositivo di test.';
           });
           FlutterBluePlus.stopScan();
         }
       });
-      */
-      // ============================================================
     } catch (e) {
+      debugPrint('❌ [BLUETOOTH] Errore durante la ricerca: $e');
       setState(() {
         _statusMessage = 'Errore durante la ricerca: ${e.toString()}';
         _isScanning = false;
@@ -410,6 +421,7 @@ class _OpenCellPageState extends State<OpenCellPage> {
         geolocation: geolocation,
       );
 
+      // Verifica che tutti i dati necessari siano presenti
       if (result.verified && result.pairingId != null && result.cellAssigned != null) {
         // Accoppiamento verificato con successo!
         setState(() {
@@ -428,22 +440,70 @@ class _OpenCellPageState extends State<OpenCellPage> {
             }
           });
         }
+      } else if (result.verified && (result.pairingId == null || result.cellAssigned == null)) {
+        // Verifica riuscita ma dati mancanti
+        setState(() {
+          _isVerifyingPairing = false;
+          _lockerConnected = false;
+          _lockerFound = false;
+          _statusMessage = 'Verifica riuscita ma dati incompleti. Riprova più tardi.';
+        });
       } else {
         // Verifica fallita
         setState(() {
           _isVerifyingPairing = false;
           _lockerConnected = false;
           _lockerFound = false;
-          _statusMessage = result.message ?? 
-              'Verifica accoppiamento fallita. ${result.reason ?? "Riprova."}';
+          // Mostra messaggio user-friendly basato sul reason
+          String errorMessage = result.message ?? 'Verifica accoppiamento fallita.';
+          
+          // Personalizza messaggio in base al tipo di errore
+          switch (result.reason) {
+            case 'connection_error':
+              errorMessage = 'Errore di connessione. Verifica la tua connessione internet e riprova.';
+              break;
+            case 'api_error':
+              errorMessage = result.message ?? 'Errore del server. Riprova più tardi.';
+              break;
+            case 'device_not_found':
+              errorMessage = 'Dispositivo non trovato. Assicurati di essere vicino al locker.';
+              break;
+            case 'too_far':
+              errorMessage = 'Sei troppo distante dal locker. Avvicinati e riprova.';
+              break;
+            case 'unauthorized':
+              errorMessage = 'Non hai i permessi per aprire questa cella.';
+              break;
+            case 'cell_unavailable':
+              errorMessage = 'La cella non è disponibile. Prova con un\'altra cella.';
+              break;
+            default:
+              errorMessage = result.message ?? 'Verifica accoppiamento fallita. Riprova.';
+          }
+          
+          _statusMessage = errorMessage;
         });
       }
     } catch (e) {
+      // Gestione errori generici (non dovrebbe mai arrivare qui se il repository gestisce tutto)
       setState(() {
         _isVerifyingPairing = false;
         _lockerConnected = false;
         _lockerFound = false;
-        _statusMessage = 'Errore nella verifica: ${e.toString()}';
+        
+        // Messaggio user-friendly basato sul tipo di errore
+        String errorMessage;
+        if (e.toString().contains('ConnectionException') || 
+            e.toString().contains('connessione') ||
+            e.toString().contains('network')) {
+          errorMessage = 'Errore di connessione. Verifica la tua connessione internet e riprova.';
+        } else if (e.toString().contains('timeout')) {
+          errorMessage = 'Timeout della richiesta. Riprova più tardi.';
+        } else {
+          errorMessage = 'Si è verificato un errore imprevisto. Riprova più tardi.';
+        }
+        
+        _statusMessage = errorMessage;
       });
     }
   }

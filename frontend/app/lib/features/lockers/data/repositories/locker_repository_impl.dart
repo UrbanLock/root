@@ -153,6 +153,20 @@ class LockerRepositoryImpl implements LockerRepository {
       if (e.isNotFound()) {
         throw Exception('Locker non trovato: $lockerId');
       }
+      
+      // Controlla se l'errore indica che il locker non ha UUID Bluetooth configurato
+      // Il backend restituisce: "Locker {id} non ha UUID Bluetooth configurato. Contattare l'amministratore."
+      final errorMessage = e.message.toLowerCase();
+      if (errorMessage.contains('uuid bluetooth') && 
+          (errorMessage.contains('non ha') || 
+           errorMessage.contains('non configurato') ||
+           errorMessage.contains('not configured'))) {
+        throw BluetoothNotConfiguredException(
+          lockerId,
+          message: e.message,
+        );
+      }
+      
       throw Exception('Errore nel caricamento info Bluetooth: ${e.message}');
     }
   }

@@ -119,12 +119,25 @@ class BluetoothPairingResult {
   });
   
   factory BluetoothPairingResult.fromJson(Map<String, dynamic> json) {
+    // Prova a parsare cellAssigned, ma gestisci errori di parsing
+    ActiveCell? cellAssigned;
+    if (json['cellAssigned'] != null) {
+      try {
+        final cellData = json['cellAssigned'];
+        if (cellData is Map<String, dynamic>) {
+          cellAssigned = ActiveCell.fromJson(cellData);
+        }
+      } catch (e) {
+        // Se il parsing fallisce, lascia cellAssigned null
+        // Il risultato sarà comunque valido se verified è false
+        cellAssigned = null;
+      }
+    }
+    
     return BluetoothPairingResult(
       verified: json['verified'] as bool? ?? false,
       pairingId: json['pairingId'] as String?,
-      cellAssigned: json['cellAssigned'] != null
-          ? ActiveCell.fromJson(json['cellAssigned'] as Map<String, dynamic>)
-          : null,
+      cellAssigned: cellAssigned,
       reason: json['reason'] as String?,
       message: json['message'] as String?,
     );

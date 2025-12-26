@@ -68,6 +68,21 @@ class ValidationException implements Exception {
   String toString() => 'ValidationException: $message';
 }
 
+/// Eccezione per quando un locker non ha UUID Bluetooth configurato
+/// Questa eccezione viene lanciata quando il backend indica che il locker
+/// non ha un UUID Bluetooth configurato, permettendo al frontend di
+/// attivare la modalità testing (simulazione con timer)
+class BluetoothNotConfiguredException implements Exception {
+  final String lockerId;
+  final String message;
+
+  BluetoothNotConfiguredException(this.lockerId, {String? message})
+      : message = message ?? 'Locker $lockerId non ha UUID Bluetooth configurato';
+
+  @override
+  String toString() => 'BluetoothNotConfiguredException: $message';
+}
+
 
 
 
