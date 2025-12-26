@@ -370,7 +370,7 @@ class _DepositOpenCellPageState extends State<DepositOpenCellPage> {
 
     setState(() {
       _isVerifyingPairing = true;
-      _statusMessage = 'Verifica accoppiamento con backend...';
+      _statusMessage = 'Verifica in corso...';
     });
 
     try {
@@ -414,12 +414,23 @@ class _DepositOpenCellPageState extends State<DepositOpenCellPage> {
           _isVerifyingPairing = false;
           _lockerConnected = false;
           _lockerFound = false;
-          String errorMessage = result.message ?? 'Verifica accoppiamento fallita.';
+          _isScanning = false;
+          
+          // Mostra messaggio user-friendly basato sul reason
+          String errorMessage;
           
           // Personalizza messaggio in base al tipo di errore
           switch (result.reason) {
             case 'connection_error':
               errorMessage = 'Errore di connessione. Verifica la tua connessione internet e riprova.';
+              break;
+            case 'validation_error':
+              // Errore di validazione dal backend (UUID non corrisponde, troppo distante, ecc.)
+              errorMessage = result.message ?? 'Verifica fallita. Assicurati di essere vicino al locker corretto.';
+              break;
+            case 'not_found':
+              // Locker o cella non trovata
+              errorMessage = result.message ?? 'Locker o cella non trovata. Riprova più tardi.';
               break;
             case 'api_error':
               errorMessage = result.message ?? 'Errore del server. Riprova più tardi.';
@@ -436,18 +447,31 @@ class _DepositOpenCellPageState extends State<DepositOpenCellPage> {
             case 'cell_unavailable':
               errorMessage = 'La cella non è disponibile. Prova con un\'altra cella.';
               break;
+            case 'parse_error':
+              errorMessage = 'Errore nella lettura della risposta del server. Riprova più tardi.';
+              break;
+            case 'invalid_response':
+              errorMessage = 'Risposta non valida dal server. Riprova più tardi.';
+              break;
+            case 'unknown_error':
+              errorMessage = 'Errore durante la verifica. Riprova più tardi.';
+              break;
             default:
-              errorMessage = result.message ?? 'Verifica accoppiamento fallita. Riprova.';
+              // Usa il messaggio dal backend se disponibile, altrimenti messaggio generico
+              errorMessage = result.message ?? 'Verifica fallita. Riprova.';
           }
           
           _statusMessage = errorMessage;
         });
       }
     } catch (e) {
+      // Gestione errori generici
+      debugPrint('❌ [ERROR] Errore imprevisto durante verifica: $e');
       setState(() {
         _isVerifyingPairing = false;
         _lockerConnected = false;
         _lockerFound = false;
+        _isScanning = false;
         
         String errorMessage;
         if (e.toString().contains('ConnectionException') || 
@@ -457,7 +481,7 @@ class _DepositOpenCellPageState extends State<DepositOpenCellPage> {
         } else if (e.toString().contains('timeout')) {
           errorMessage = 'Timeout della richiesta. Riprova più tardi.';
         } else {
-          errorMessage = 'Si è verificato un errore imprevisto. Riprova più tardi.';
+          errorMessage = 'Errore durante la verifica. Riprova più tardi.';
         }
         
         _statusMessage = errorMessage;

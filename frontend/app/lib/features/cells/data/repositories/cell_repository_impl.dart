@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:app/core/api/api_client.dart';
 import 'package:app/core/api/api_exception.dart';
 import 'package:app/core/config/api_config.dart';
@@ -168,14 +169,19 @@ class CellRepositoryImpl implements CellRepository {
         body['geolocation'] = geolocation;
       }
 
+      debugPrint('📤 [API] Invio richiesta verifyBluetoothPairing: lockerId=$lockerId, cellId=$cellId, bluetoothUuid=$bluetoothUuid');
+      
       final response = await _apiClient.post(
         ApiConfig.verifyBluetoothPairingEndpoint,
         body: body,
         requireAuth: true,
       );
 
+      debugPrint('📥 [API] Risposta ricevuta: $response');
+
       // Verifica che la risposta sia un Map
       if (response is! Map<String, dynamic>) {
+        debugPrint('❌ [API] Risposta non è un Map: ${response.runtimeType}');
         return BluetoothPairingResult(
           verified: false,
           reason: 'invalid_response',
@@ -185,10 +191,16 @@ class CellRepositoryImpl implements CellRepository {
 
       // Prova a parsare la risposta, gestendo errori di parsing
       try {
-        return BluetoothPairingResult.fromJson(response);
+        final result = BluetoothPairingResult.fromJson(response);
+        debugPrint('✅ [API] Parsing riuscito: verified=${result.verified}, pairingId=${result.pairingId}, reason=${result.reason}');
+        return result;
       } catch (e) {
+        debugPrint('❌ [API] Errore parsing: $e');
+        debugPrint('❌ [API] Response data: $response');
+        
         // Se il parsing fallisce ma verified è false, restituisci comunque il risultato
         if (response['verified'] == false) {
+          debugPrint('⚠️ [API] verified=false, restituisco risultato con dati disponibili');
           return BluetoothPairingResult(
             verified: false,
             reason: response['reason'] as String? ?? 'parse_error',
@@ -196,6 +208,7 @@ class CellRepositoryImpl implements CellRepository {
           );
         }
         // Se verified è true ma il parsing fallisce, è un errore critico
+        debugPrint('❌ [API] verified=true ma parsing fallito, errore critico');
         return BluetoothPairingResult(
           verified: false,
           reason: 'parse_error',
@@ -203,10 +216,32 @@ class CellRepositoryImpl implements CellRepository {
         );
       }
     } on ApiException catch (e) {
-      // Se il backend restituisce errore, crea risultato con verified: false
+      // Se il backend restituisce errore 400 con formato { success: false, data: {...} }
+      // estrai i dati dall'errorData se disponibile
+      debugPrint('❌ [API ERROR] Status: ${e.statusCode}, Message: ${e.message}');
+      debugPrint('❌ [API ERROR] ErrorData: ${e.errorData}');
+      
+      if (e.isBadRequest() && e.errorData != null) {
+        try {
+          // Il backend restituisce errori 400 con data: { verified: false, reason: ..., message: ... }
+          final errorData = e.errorData!;
+          debugPrint('✅ [API ERROR] Usando errorData: reason=${errorData['reason']}, message=${errorData['message']}');
+          return BluetoothPairingResult(
+            verified: false,
+            reason: errorData['reason'] as String? ?? 'validation_error',
+            message: errorData['message'] as String? ?? e.message,
+          );
+        } catch (parseError) {
+          debugPrint('❌ [API ERROR] Errore parsing errorData: $parseError');
+          // Se il parsing fallisce, usa il messaggio dell'eccezione
+        }
+      }
+      
+      // Per altri errori API, crea risultato con verified: false
+      debugPrint('⚠️ [API ERROR] Usando messaggio generico: ${e.message}');
       return BluetoothPairingResult(
         verified: false,
-        reason: 'api_error',
+        reason: e.isBadRequest() ? 'validation_error' : 'api_error',
         message: e.message,
       );
     } on ConnectionException catch (e) {
@@ -225,10 +260,11 @@ class CellRepositoryImpl implements CellRepository {
       );
     } catch (e) {
       // Altri errori generici
+      debugPrint('❌ [ERROR] Errore imprevisto durante verifica Bluetooth pairing: $e');
       return BluetoothPairingResult(
         verified: false,
         reason: 'unknown_error',
-        message: 'Si è verificato un errore imprevisto. Riprova più tardi.',
+        message: 'Errore durante la verifica. Riprova più tardi.',
       );
     }
   }

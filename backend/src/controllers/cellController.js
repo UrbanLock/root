@@ -662,38 +662,16 @@ export async function verifyBluetoothPairing(req, res, next) {
     }
 
     // 2. Verifica che UUID corrisponda al locker (CONTROLLO CRITICO - solo backend)
+    // SICUREZZA: Richiediamo solo UUID esatto. Il nome Bluetooth è facilmente spoofabile e non viene usato.
     // Normalizza UUID (rimuovi trattini e due punti per confronto)
     const normalizeUuid = (uuid) => uuid.replace(/[-:]/g, '').toLowerCase();
     const lockerUuidNormalized = normalizeUuid(locker.bluetoothUuid);
     const receivedUuidNormalized = normalizeUuid(bluetoothUuid);
 
+    // Verifica UUID esatto normalizzato (unico metodo di verifica sicuro)
     if (lockerUuidNormalized !== receivedUuidNormalized) {
-      // Verifica anche nome Bluetooth come fallback (solo se UUID non corrisponde)
-      // NOTA: Il nome Bluetooth è meno sicuro dell'UUID, quindi usiamo match esatto o molto vicino
-      let nameMatch = false;
-      if (locker.bluetoothName && deviceName) {
-        const lockerNameNormalized = locker.bluetoothName.toLowerCase().trim();
-        const deviceNameNormalized = deviceName.toLowerCase().trim();
-        
-        // Match esatto normalizzato (più sicuro)
-        nameMatch = lockerNameNormalized === deviceNameNormalized;
-        
-        // Se non c'è match esatto, verifica se il nome del dispositivo contiene il nome del locker
-        // (utile per dispositivi con nomi come "Locker-001" vs "Locker-001-BLE")
-        if (!nameMatch && deviceNameNormalized.includes(lockerNameNormalized)) {
-          nameMatch = true;
-        }
-      }
-
-      if (!nameMatch) {
-        throw new ValidationError(
-          'UUID Bluetooth non corrisponde al locker richiesto. Verifica di essere vicino al locker corretto.'
-        );
-      }
-      
-      // Log warning se usiamo fallback nome invece di UUID
-      logger.warn(
-        `Verifica Bluetooth usando nome invece di UUID per locker ${lockerId}. UUID: ${bluetoothUuid} vs ${locker.bluetoothUuid}`
+      throw new ValidationError(
+        'UUID Bluetooth non corrisponde al locker richiesto. Verifica di essere vicino al locker corretto e che il Bluetooth sia attivo.'
       );
     }
 

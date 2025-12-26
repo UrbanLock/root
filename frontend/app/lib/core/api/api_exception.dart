@@ -18,11 +18,42 @@ class ApiException implements Exception {
   factory ApiException.fromResponse(int statusCode, String responseBody) {
     try {
       final json = jsonDecode(responseBody) as Map<String, dynamic>;
-      final message = json['message'] as String? ?? 
-                     json['error'] as String? ?? 
-                     'Errore sconosciuto';
-      final errorCode = json['errorCode'] as String?;
-      final errorData = json['data'] as Map<String, dynamic>?;
+      
+      // Il backend può restituire due formati:
+      // 1. { success: false, data: { verified: false, reason: ..., message: ... } } (dal controller)
+      // 2. { success: false, error: { message: ..., code: ..., statusCode: ... } } (dall'error handler globale)
+      
+      Map<String, dynamic>? errorData;
+      String message = 'Errore sconosciuto';
+      String? errorCode;
+      
+      // Prova formato 1: data
+      if (json.containsKey('data') && json['data'] is Map<String, dynamic>) {
+        errorData = json['data'] as Map<String, dynamic>;
+        if (errorData!['message'] != null) {
+          message = errorData!['message'] as String;
+        }
+      }
+      // Prova formato 2: error
+      else if (json.containsKey('error') && json['error'] is Map<String, dynamic>) {
+        final error = json['error'] as Map<String, dynamic>;
+        if (error['message'] != null) {
+          message = error['message'] as String;
+        }
+        if (error['code'] != null) {
+          errorCode = error['code'] as String;
+        }
+        // Crea errorData compatibile con il formato atteso
+        errorData = {
+          'verified': false,
+          'reason': error['code'] as String? ?? 'api_error',
+          'message': message,
+        };
+      }
+      // Fallback: cerca message direttamente
+      else if (json['message'] != null) {
+        message = json['message'] as String;
+      }
       
       return ApiException(
         statusCode,

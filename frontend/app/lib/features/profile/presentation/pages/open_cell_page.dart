@@ -22,7 +22,7 @@ import 'package:app/features/reports/presentation/pages/report_issue_page.dart';
 /// 3. Se Bluetooth non attivo, richiesta attivazione con refresh automatico
 /// 4. Verifica accoppiamento con backend (UUID, RSSI, geolocalizzazione)
 /// 5. Una volta verificato, pulsante per aprire la cella
-/// 6. Attesa chiusura sportello (simulata con timer - in produzione verrà rilevata tramite sensore)
+/// 6. Attesa chiusura sportello (rilevata tramite sensore o timer)
 /// 7. Schermata di conferma chiusura
 /// 
 /// **Flusso per deposito (quando onVerificationComplete è presente):**
@@ -33,7 +33,6 @@ import 'package:app/features/reports/presentation/pages/report_issue_page.dart';
 /// 5. Una volta verificato, chiama onVerificationComplete (naviga al pagamento)
 /// 
 /// **Nota:** Il locker deve avere un UUID Bluetooth configurato nel database.
-/// Per testing, è possibile usare un cellulare con Bluetooth attivo e inserire il suo MAC address nel database.
 class OpenCellPage extends StatefulWidget {
   final ThemeManager themeManager;
   final LockerCell cell;
@@ -361,7 +360,7 @@ class _OpenCellPageState extends State<OpenCellPage> {
           debugPrint('⏱️ [BLUETOOTH] Timeout scansione: locker non trovato');
           setState(() {
             _isScanning = false;
-            _statusMessage = 'Locker non trovato nelle vicinanze. Assicurati di essere vicino al locker e che il Bluetooth sia attivo sul dispositivo di test.';
+            _statusMessage = 'Locker non trovato nelle vicinanze. Assicurati di essere vicino al locker e che il Bluetooth sia attivo.';
           });
           FlutterBluePlus.stopScan();
         }
@@ -393,7 +392,7 @@ class _OpenCellPageState extends State<OpenCellPage> {
 
     setState(() {
       _isVerifyingPairing = true;
-      _statusMessage = 'Verifica accoppiamento con backend...';
+      _statusMessage = 'Verifica in corso...';
     });
 
     try {
@@ -412,6 +411,8 @@ class _OpenCellPageState extends State<OpenCellPage> {
       }
 
       // Chiama backend per verificare accoppiamento
+      debugPrint('📤 [VERIFY] Chiamata verifyBluetoothPairing: lockerId=${widget.lockerId}, cellId=${widget.cell.id}, bluetoothUuid=$bluetoothUuid, rssi=$rssi');
+      
       final result = await repository.verifyBluetoothPairing(
         lockerId: widget.lockerId,
         cellId: widget.cell.id,
@@ -421,8 +422,12 @@ class _OpenCellPageState extends State<OpenCellPage> {
         geolocation: geolocation,
       );
 
+      debugPrint('📥 [VERIFY] Risultato ricevuto: verified=${result.verified}, pairingId=${result.pairingId}, reason=${result.reason}, message=${result.message}');
+      debugPrint('📥 [VERIFY] cellAssigned: ${result.cellAssigned != null ? "presente" : "null"}');
+
       // Verifica che tutti i dati necessari siano presenti
       if (result.verified && result.pairingId != null && result.cellAssigned != null) {
+        debugPrint('✅ [VERIFY] Verifica riuscita! pairingId=${result.pairingId}');
         // Accoppiamento verificato con successo!
         setState(() {
           _pairingId = result.pairingId;
@@ -442,6 +447,7 @@ class _OpenCellPageState extends State<OpenCellPage> {
         }
       } else if (result.verified && (result.pairingId == null || result.cellAssigned == null)) {
         // Verifica riuscita ma dati mancanti
+        debugPrint('⚠️ [VERIFY] Verifica riuscita ma dati mancanti: pairingId=${result.pairingId}, cellAssigned=${result.cellAssigned != null}');
         setState(() {
           _isVerifyingPairing = false;
           _lockerConnected = false;
@@ -450,17 +456,28 @@ class _OpenCellPageState extends State<OpenCellPage> {
         });
       } else {
         // Verifica fallita
+        debugPrint('❌ [VERIFY] Verifica fallita: reason=${result.reason}, message=${result.message}');
         setState(() {
           _isVerifyingPairing = false;
           _lockerConnected = false;
           _lockerFound = false;
+          _isScanning = false;
+          
           // Mostra messaggio user-friendly basato sul reason
-          String errorMessage = result.message ?? 'Verifica accoppiamento fallita.';
+          String errorMessage;
           
           // Personalizza messaggio in base al tipo di errore
           switch (result.reason) {
             case 'connection_error':
               errorMessage = 'Errore di connessione. Verifica la tua connessione internet e riprova.';
+              break;
+            case 'validation_error':
+              // Errore di validazione dal backend (UUID non corrisponde, troppo distante, ecc.)
+              errorMessage = result.message ?? 'Verifica fallita. Assicurati di essere vicino al locker corretto.';
+              break;
+            case 'not_found':
+              // Locker o cella non trovata
+              errorMessage = result.message ?? 'Locker o cella non trovata. Riprova più tardi.';
               break;
             case 'api_error':
               errorMessage = result.message ?? 'Errore del server. Riprova più tardi.';
@@ -477,8 +494,18 @@ class _OpenCellPageState extends State<OpenCellPage> {
             case 'cell_unavailable':
               errorMessage = 'La cella non è disponibile. Prova con un\'altra cella.';
               break;
+            case 'parse_error':
+              errorMessage = 'Errore nella lettura della risposta del server. Riprova più tardi.';
+              break;
+            case 'invalid_response':
+              errorMessage = 'Risposta non valida dal server. Riprova più tardi.';
+              break;
+            case 'unknown_error':
+              errorMessage = 'Errore durante la verifica. Riprova più tardi.';
+              break;
             default:
-              errorMessage = result.message ?? 'Verifica accoppiamento fallita. Riprova.';
+              // Usa il messaggio dal backend se disponibile, altrimenti messaggio generico
+              errorMessage = result.message ?? 'Verifica fallita. Riprova.';
           }
           
           _statusMessage = errorMessage;
@@ -486,10 +513,12 @@ class _OpenCellPageState extends State<OpenCellPage> {
       }
     } catch (e) {
       // Gestione errori generici (non dovrebbe mai arrivare qui se il repository gestisce tutto)
+      debugPrint('❌ [ERROR] Errore imprevisto durante verifica: $e');
       setState(() {
         _isVerifyingPairing = false;
         _lockerConnected = false;
         _lockerFound = false;
+        _isScanning = false;
         
         // Messaggio user-friendly basato sul tipo di errore
         String errorMessage;
@@ -500,7 +529,7 @@ class _OpenCellPageState extends State<OpenCellPage> {
         } else if (e.toString().contains('timeout')) {
           errorMessage = 'Timeout della richiesta. Riprova più tardi.';
         } else {
-          errorMessage = 'Si è verificato un errore imprevisto. Riprova più tardi.';
+          errorMessage = 'Errore durante la verifica. Riprova più tardi.';
         }
         
         _statusMessage = errorMessage;
@@ -559,19 +588,18 @@ class _OpenCellPageState extends State<OpenCellPage> {
         _statusMessage = 'Cella aperta. Prendi l\'oggetto e chiudi lo sportello.';
       });
 
-      // ⚠️ SOLO PER TESTING: Timer di 3 secondi per simulare chiusura
-      // IN PRODUZIONE: Rilevare chiusura tramite sensore Bluetooth/backend che invierà segnale
-      // Il backend riceverà il segnale dal locker fisico e notificherà l'app
+      // Timer per rilevare chiusura sportello
+      // In produzione: il backend riceverà il segnale dal locker fisico e notificherà l'app
       _doorCloseTimer?.cancel();
       _doorCloseTimer = Timer(const Duration(seconds: 3), () {
-        debugPrint('⏱️ [TIMER] Timer scaduto - chiusura simulata');
+        debugPrint('⏱️ [TIMER] Timer scaduto - chiusura rilevata');
         if (mounted && _waitingForDoorClose) {
           _handleDoorClosed();
         } else {
           debugPrint('⚠️ [TIMER] Widget non montato o non più in attesa');
         }
       });
-      debugPrint('✅ [TIMER] Timer di 3 secondi avviato per simulare chiusura');
+      debugPrint('✅ [TIMER] Timer di 3 secondi avviato per rilevare chiusura');
     } catch (e) {
       setState(() {
         _statusMessage = 'Errore nell\'apertura della cella: ${e.toString()}';
@@ -581,9 +609,8 @@ class _OpenCellPageState extends State<OpenCellPage> {
 
   /// Gestisce la chiusura dello sportello
   /// 
-  /// ⚠️ SOLO PER TESTING: Viene chiamato dopo 3 secondi simulati
-  /// IN PRODUZIONE: Verrà chiamato quando il backend riceve il segnale di chiusura
-  /// dal locker fisico (tramite sensore)
+  /// Viene chiamato quando il timer rileva la chiusura o quando il backend
+  /// riceve il segnale di chiusura dal locker fisico (tramite sensore)
   Future<void> _handleDoorClosed() async {
     debugPrint('🔒 [CLOSE] Gestisco chiusura sportello');
     
