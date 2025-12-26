@@ -153,12 +153,10 @@ export async function requestCell(req, res, next) {
       costo = tariffa.perOra;
     }
 
-    // Genera noleggioId (DEVE essere prima di generateQRCode)
+    // Genera noleggioId
     const noleggioId = await Noleggio.generateNoleggioId();
 
-    // RF3: Genera QR code e Bluetooth token (implementazione reale)
-    // Nota: qrCode può essere stringa o oggetto {data, image}
-    const qrCode = await Noleggio.generateQRCode(noleggioId, cell.cellaId, lockerId);
+    // Genera Bluetooth token (QR code non più utilizzato)
     const bluetoothToken = Noleggio.generateBluetoothToken();
 
     // Crea Noleggio
@@ -172,7 +170,6 @@ export async function requestCell(req, res, next) {
       dataInizio,
       oraInizio,
       costo,
-      qrCode,
       bluetoothToken,
       geolocalizzazione,
       // Salva foto su filesystem (implementazione reale)
@@ -309,18 +306,7 @@ export async function openCell(req, res, next) {
       );
     }
 
-    // RF3: Verifica QR/Bluetooth token se presente
-    // Nota: qrCode può essere stringa o oggetto {data, image}
-    if (noleggio.qrCode && req.body.qrCode) {
-      const qrCodeData = typeof noleggio.qrCode === 'object' && noleggio.qrCode.data
-        ? noleggio.qrCode.data
-        : noleggio.qrCode;
-      
-      if (qrCodeData !== req.body.qrCode) {
-        throw new ValidationError('QR code non valido');
-      }
-    }
-
+    // RF3: Verifica Bluetooth token se presente (QR code non più utilizzato)
     if (noleggio.bluetoothToken && req.body.bluetoothToken) {
       if (noleggio.bluetoothToken !== req.body.bluetoothToken) {
         throw new ValidationError('Bluetooth token non valido');
@@ -345,21 +331,11 @@ export async function openCell(req, res, next) {
       `Cella aperta: ${cell_id_final} - Noleggio: ${noleggio.noleggioId}, Utente: ${userId}${pairingId ? ` (pairingId: ${pairingId})` : ''}`
     );
 
-    // Estrai dati QR code (può essere stringa o oggetto con data/image)
-    let qrCodeData = noleggio.qrCode;
-    let qrCodeImage = null;
-    if (typeof noleggio.qrCode === 'object' && noleggio.qrCode.data) {
-      qrCodeData = noleggio.qrCode.data;
-      qrCodeImage = noleggio.qrCode.image;
-    }
-
     res.json({
       success: true,
       data: {
         cell_id: cell_id_final,
         door_opened: true,
-        qrCode: qrCodeData,
-        qrCodeImage: qrCodeImage, // Immagine base64 per visualizzazione
         bluetoothToken: noleggio.bluetoothToken,
         message: 'Cella aperta con successo',
       },
@@ -778,8 +754,7 @@ export async function verifyBluetoothPairing(req, res, next) {
     // Genera noleggioId
     const noleggioId = await Noleggio.generateNoleggioId();
 
-    // Genera QR code e Bluetooth token
-    const qrCode = await Noleggio.generateQRCode(noleggioId, cellId, lockerId);
+    // Genera Bluetooth token (QR code non più utilizzato)
     const bluetoothToken = Noleggio.generateBluetoothToken();
 
     // Crea Noleggio
@@ -793,7 +768,6 @@ export async function verifyBluetoothPairing(req, res, next) {
       dataInizio,
       oraInizio,
       costo: 0, // Prestito è gratuito
-      qrCode,
       bluetoothToken,
       geolocalizzazione: geolocation || null,
     });
