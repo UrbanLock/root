@@ -352,13 +352,26 @@ export async function openCell(req, res, next) {
       // 
       // Per testing: simula chiusura automatica dopo 5 secondi dall'apertura
       // Questo permette di testare il flusso completo senza locker fisico
+      logger.info(
+        `[MOCK] ⚠️ Programmata chiusura automatica mock dopo 5 secondi per cella ${cell_id_final} - Noleggio: ${noleggio.noleggioId}`
+      );
       setTimeout(async () => {
         try {
+          // Ricarica noleggio dal database per assicurarsi di avere lo stato più recente
           const noleggioUpdated = await Noleggio.findOne({
             noleggioId: noleggio.noleggioId,
           });
           
-          if (noleggioUpdated && noleggioUpdated.cellaAperta && !noleggioUpdated.cellaChiusa) {
+          if (!noleggioUpdated) {
+            logger.error(`[MOCK] Noleggio ${noleggio.noleggioId} non trovato durante chiusura mock`);
+            return;
+          }
+          
+          logger.info(
+            `[MOCK] Verifica stato noleggio: cellaAperta=${noleggioUpdated.cellaAperta}, cellaChiusa=${noleggioUpdated.cellaChiusa}`
+          );
+          
+          if (noleggioUpdated.cellaAperta && !noleggioUpdated.cellaChiusa) {
             // ========== MOCK: Simula chiusura automatica dopo 5 secondi ==========
             // In produzione: questo stato verrà aggiornato dal locker fisico
             // quando il sensore rileva che lo sportello è stato chiuso
@@ -366,6 +379,10 @@ export async function openCell(req, res, next) {
             noleggioUpdated.dataChiusura = new Date();
             noleggioUpdated.dataAggiornamento = new Date();
             await noleggioUpdated.save();
+            
+            logger.info(
+              `[MOCK] ✅ Noleggio ${noleggioUpdated.noleggioId} aggiornato: cellaChiusa=true, dataChiusura=${noleggioUpdated.dataChiusura.toISOString()}`
+            );
             
             // ========== AGGIORNA STATO CELLA A "OCCUPATA" ==========
             // Quando lo sportello viene chiuso, la cella passa a "occupata"
@@ -376,21 +393,28 @@ export async function openCell(req, res, next) {
               cellForClose.dataAggiornamento = new Date();
               await cellForClose.save();
               logger.info(
-                `[MOCK] Cella ${cell_id_final} impostata a stato "occupata" - Sportello chiuso, oggetto in prestito`
+                `[MOCK] ✅ Cella ${cell_id_final} impostata a stato "occupata" - Sportello chiuso, oggetto in prestito`
               );
+            } else {
+              logger.error(`[MOCK] ❌ Cella ${cell_id_final} non trovata durante aggiornamento stato`);
             }
             // ========== FINE AGGIORNA STATO ==========
             
             logger.info(
-              `[MOCK] ⚠️ Chiusura automatica simulata per cella ${cell_id_final} - Noleggio: ${noleggioUpdated.noleggioId}`
+              `[MOCK] ⚠️ Chiusura automatica simulata completata per cella ${cell_id_final} - Noleggio: ${noleggioUpdated.noleggioId}`
             );
             logger.info(
               `[MOCK] ⚠️ In produzione, questo sarà rilevato dal sensore del locker fisico`
             );
             // ========== FINE MOCK CHIUSURA ==========
+          } else {
+            logger.warn(
+              `[MOCK] ⚠️ Noleggio ${noleggioUpdated.noleggioId} già chiuso o non aperto: cellaAperta=${noleggioUpdated.cellaAperta}, cellaChiusa=${noleggioUpdated.cellaChiusa}`
+            );
           }
         } catch (error) {
-          logger.error(`[MOCK] Errore chiusura automatica mock: ${error.message}`);
+          logger.error(`[MOCK] ❌ Errore chiusura automatica mock: ${error.message}`);
+          logger.error(`[MOCK] ❌ Stack trace: ${error.stack}`);
         }
       }, 5000); // 5 secondi per testing - RIMUOVERE IN PRODUZIONE
       // ========== FINE MOCK CHIUSURA AUTOMATICA ==========
@@ -1012,8 +1036,13 @@ export async function getDoorStatus(req, res, next) {
     // Il mock in openCell() aggiorna automaticamente lo stato dopo 5 secondi
     // ========== FINE MOCK MODE ==========
 
+    // Log per debug (rimuovere in produzione se troppo verboso)
+    logger.debug(
+      `[DOOR-STATUS] Richiesta stato per cella ${cellId} - Utente: ${userId} - Noleggio: ${noleggio.noleggioId} - cellaAperta: ${noleggio.cellaAperta}, cellaChiusa: ${noleggio.cellaChiusa}`
+    );
+
     // Restituisci stato sportello
-    res.json({
+    const response = {
       success: true,
       data: {
         cellId,
@@ -1026,7 +1055,13 @@ export async function getDoorStatus(req, res, next) {
           ? Math.floor((new Date() - noleggio.dataApertura) / 1000)
           : null,
       },
-    });
+    };
+
+    logger.debug(
+      `[DOOR-STATUS] Risposta: doorOpened=${response.data.doorOpened}, doorClosed=${response.data.doorClosed}, secondsSinceOpen=${response.data.secondsSinceOpen}`
+    );
+
+    res.json(response);
   } catch (error) {
     next(error);
   }

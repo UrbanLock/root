@@ -687,28 +687,45 @@ class _OpenCellPageState extends State<OpenCellPage> {
       }
       
       try {
+        debugPrint('➡️ [POLLING] Richiesta stato sportello per cellId: ${_activeCell!.cellId}');
         final doorStatus = await repository.getDoorStatus(_activeCell!.cellId);
+        debugPrint('⬅️ [POLLING] Stato ricevuto: doorOpened=${doorStatus.doorOpened}, doorClosed=${doorStatus.doorClosed}, secondsSinceOpen=${doorStatus.secondsSinceOpen}');
         
         // Aggiorna secondi trascorsi
         if (doorStatus.secondsSinceOpen != null) {
-          setState(() {
-            _doorOpenSeconds = doorStatus.secondsSinceOpen!;
-          });
+          if (mounted) {
+            setState(() {
+              _doorOpenSeconds = doorStatus.secondsSinceOpen!;
+            });
+          }
         }
         
         // Verifica se lo sportello è stato chiuso
-        if (doorStatus.doorClosed) {
-          debugPrint('✅ [POLLING] Sportello chiuso rilevato!');
+        // IMPORTANTE: Controlla doorClosed PRIMA perché quando è chiuso, doorOpened potrebbe essere ancora true
+        if (doorStatus.doorClosed == true) {
+          debugPrint('✅ [POLLING] Sportello chiuso rilevato! doorClosed=true - Fermo polling');
           timer.cancel();
           _doorCloseTimer?.cancel(); // Cancella anche timer timeout
+          // Ferma il polling immediatamente
+          _doorStatusPollingTimer = null;
+          // Gestisci chiusura
           _handleDoorClosed();
-        } else if (doorStatus.doorOpened) {
+          return; // Esci subito dopo aver rilevato la chiusura
+        } else if (doorStatus.doorOpened == true) {
           // Sportello ancora aperto, continua polling
-          debugPrint('⏳ [POLLING] Sportello ancora aperto (${doorStatus.secondsSinceOpen}s)');
+          debugPrint('⏳ [POLLING] Sportello ancora aperto (${doorStatus.secondsSinceOpen}s) - Continua polling...');
+        } else {
+          // Stato ambiguo: né aperto né chiuso
+          debugPrint('⚠️ [POLLING] Stato ambiguo: doorOpened=${doorStatus.doorOpened}, doorClosed=${doorStatus.doorClosed} - Continua polling...');
         }
       } catch (e) {
         debugPrint('❌ [POLLING] Errore verifica stato sportello: $e');
-        // Continua polling anche in caso di errore
+        // Continua polling anche in caso di errore, ma mostra messaggio
+        if (mounted) {
+          setState(() {
+            _statusMessage = 'Errore nel controllo stato sportello. Riprovo...';
+          });
+        }
       }
     });
     
@@ -728,19 +745,24 @@ class _OpenCellPageState extends State<OpenCellPage> {
     }
     
     if (!_waitingForDoorClose) {
-      debugPrint('❌ [CLOSE] Non più in attesa di chiusura');
+      debugPrint('⚠️ [CLOSE] Non più in attesa di chiusura (già gestita?)');
       return;
     }
     
-    // Cancella timer e polling
-    _doorCloseTimer?.cancel(); // ========== MOCK - RIMUOVERE IN PRODUZIONE ==========
-    _doorCloseTimer = null;
+    // Ferma immediatamente il polling per evitare chiamate multiple
     _doorStatusPollingTimer?.cancel();
     _doorStatusPollingTimer = null;
+    _doorCloseTimer?.cancel();
+    _doorCloseTimer = null;
     
-    setState(() {
-      _waitingForDoorClose = false;
-    });
+    // Aggiorna stato per evitare chiamate multiple
+    if (mounted) {
+      setState(() {
+        _waitingForDoorClose = false;
+      });
+    }
+    
+    debugPrint('✅ [CLOSE] Timer e polling fermati, stato aggiornato');
 
     final activeCell = _activeCell ??
         ActiveCell(
